@@ -8,26 +8,32 @@
     <GroupSidebar v-model="library.activeCollection" />
 
     <!-- 顶栏 -->
-    <v-app-bar flat density="comfortable" :height="56" class="topbar" style="background: var(--st-black)">
-      <div class="d-flex align-center flex-grow-1 px-6 ga-3">
-        <v-text-field
-          v-model="library.search"
-          :placeholder="t('library.search')"
-          prepend-inner-icon="mdi-magnify"
-          variant="underlined"
-          density="comfortable"
-          hide-details
-          max-width="380"
-          clearable
-        />
-        <v-spacer />
-        <v-btn variant="tonal" prepend-icon="mdi-monitor-screenshot" @click="screenshotOpen = true">
-          {{ t("library.screenshot") }}
-        </v-btn>
-        <v-btn color="primary" variant="flat" prepend-icon="mdi-plus" @click="openImport([])">
-          {{ t("library.import") }}
-        </v-btn>
-        <v-btn icon="mdi-cog-outline" variant="text" @click="router.push('/settings')" />
+    <v-app-bar flat density="comfortable" :height="56" class="topbar" style="background: var(--st-black)" data-tauri-drag-region>
+      <div class="d-flex align-center flex-grow-1 pl-6 pr-2 ga-3 min-width-0" data-tauri-drag-region>
+        <div style="flex: 0 1 380px; min-width: 140px; -webkit-app-region: no-drag">
+          <v-text-field
+            v-model="library.search"
+            :placeholder="t('library.search')"
+            prepend-inner-icon="mdi-magnify"
+            variant="underlined"
+            density="comfortable"
+            hide-details
+            clearable
+          />
+        </div>
+        <v-spacer data-tauri-drag-region />
+        <div class="d-flex align-center ga-2 flex-shrink-0" style="-webkit-app-region: no-drag">
+          <v-btn variant="tonal" prepend-icon="mdi-monitor-screenshot" @click="screenshotOpen = true">
+            {{ t("library.screenshot") }}
+          </v-btn>
+          <v-btn color="primary" variant="flat" prepend-icon="mdi-plus" @click="openImport([])">
+            {{ t("library.import") }}
+          </v-btn>
+          <v-btn icon="mdi-cog-outline" variant="text" @click="router.push('/settings')" />
+        </div>
+        <div class="ml-1 flex-shrink-0">
+          <WindowControls />
+        </div>
       </div>
     </v-app-bar>
 
@@ -110,6 +116,7 @@ import ImportDialog from "@/components/ImportDialog.vue";
 import ScreenCaptureDialog from "@/components/ScreenCaptureDialog.vue";
 import EditSongDialog from "@/components/EditSongDialog.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import WindowControls from "@/components/WindowControls.vue";
 
 const router = useRouter();
 const library = useLibraryStore();

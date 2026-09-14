@@ -5,90 +5,98 @@
     @mousemove="onMouseMove"
   >
     <!-- 顶部悬浮工具栏 -->
-    <div class="st-viewer-bar st-viewer-bar--top" :class="{ 'st-viewer-bar--hidden': barsHidden }">
-      <div class="d-flex align-center px-3 ga-1" style="height: 56px">
-        <v-btn icon="mdi-arrow-left" variant="text" :title="t('viewer.back')" @click="goBack" />
-        <div class="flex-grow-1 min-width-0 ml-1">
-          <div class="font-weight-black text-truncate" style="font-size: 15px">
-            {{ song?.title || "…" }}
-          </div>
-          <div class="st-mono text-truncate">
-            {{ song?.artist }} · {{ modeItems.find((m) => m.value === mode)?.title }}
+    <div class="st-viewer-bar st-viewer-bar--top" :class="{ 'st-viewer-bar--hidden': barsHidden }" data-tauri-drag-region>
+      <div class="d-flex align-center px-3 ga-1" style="height: 56px" data-tauri-drag-region>
+        <div class="d-flex align-center flex-grow-1 min-width-0" data-tauri-drag-region>
+          <v-btn icon="mdi-arrow-left" variant="text" :title="t('viewer.back')" style="-webkit-app-region: no-drag" @click="goBack" />
+          <div class="min-width-0 ml-1" data-tauri-drag-region>
+            <div class="font-weight-black text-truncate" style="font-size: 15px" data-tauri-drag-region>
+              {{ song?.title || "…" }}
+            </div>
+            <div class="st-mono text-truncate" data-tauri-drag-region>
+              {{ song?.artist }} · {{ modeItems.find((m) => m.value === mode)?.title }}
+            </div>
           </div>
         </div>
 
-        <v-btn-toggle v-model="mode" mandatory density="comfortable" class="mr-2" variant="outlined">
-          <v-btn v-for="m in modeItems" :key="m.value" :value="m.value">
-            <v-icon size="20">{{ m.icon }}</v-icon>
-            <v-tooltip activator="parent" location="bottom">{{ m.title }}</v-tooltip>
-          </v-btn>
-        </v-btn-toggle>
-
-        <v-select
-          v-model="zoomMode"
-          :items="zoomItems"
-          hide-details
-          density="compact"
-          variant="underlined"
-          max-width="150"
-          class="mr-1"
-        />
-
-        <!-- 背景颜色设置 -->
-        <v-menu :close-on-content-click="false" location="bottom end">
-          <template #activator="{ props: menuProps }">
-            <v-btn
-              v-bind="menuProps"
-              icon="mdi-palette"
-              variant="text"
-              :title="t('viewer.bg_color')"
-              class="mr-1"
-            >
-              <v-icon :style="{ color: bg }">mdi-circle</v-icon>
+        <div class="d-flex align-center ga-1" style="-webkit-app-region: no-drag">
+          <v-btn-toggle v-model="mode" mandatory density="comfortable" class="mr-2" variant="outlined">
+            <v-btn v-for="m in modeItems" :key="m.value" :value="m.value">
+              <v-icon size="20">{{ m.icon }}</v-icon>
+              <v-tooltip activator="parent" location="bottom">{{ m.title }}</v-tooltip>
             </v-btn>
-          </template>
-          <div class="st-bg-menu pa-3">
-            <div class="text-caption font-weight-bold mb-2">{{ t("viewer.bg_color") }}</div>
-            <div class="d-flex align-center ga-2 mb-2">
-              <div
-                v-for="c in BG_PRESETS"
-                :key="c"
-                class="viewer-swatch"
-                :class="{ active: bg.toLowerCase() === c.toLowerCase() }"
-                :style="{ background: c }"
-                @click="setBgColor(c)"
-              />
-            </div>
-            <div class="d-flex align-center ga-2 pt-1 border-t-2" style="border-color: rgba(255,255,255,0.1)">
-              <span class="st-mono text-caption">{{ bg }}</span>
-              <v-spacer />
-              <label class="viewer-swatch custom d-flex align-center justify-center">
-                <v-icon icon="mdi-eyedropper-variant" size="14" />
-                <input
-                  type="color"
-                  class="color-input"
-                  :value="bg"
-                  @input="setBgColor(($event.target as HTMLInputElement).value)"
-                />
-              </label>
-            </div>
-          </div>
-        </v-menu>
+          </v-btn-toggle>
 
-        <v-btn
-          :icon="aiEnabled ? 'mdi-motion-sensor' : 'mdi-motion-sensor-off'"
-          :variant="aiEnabled ? 'flat' : 'text'"
-          :color="aiEnabled ? 'primary' : undefined"
-          :title="t('viewer.ai')"
-          class="ml-1"
-          @click="toggleAI"
-        />
-        <v-btn
-          :icon="fullscreen ? 'mdi-fullscreen-exit' : 'mdi-fullscreen'"
-          variant="text"
-          :title="t('viewer.fullscreen')"
-          @click="toggleFullscreen"
-        />
+          <v-select
+            v-model="zoomMode"
+            :items="zoomItems"
+            hide-details
+            density="compact"
+            variant="underlined"
+            max-width="150"
+            class="mr-1"
+          />
+
+          <!-- 背景颜色设置 -->
+          <v-menu :close-on-content-click="false" location="bottom end">
+            <template #activator="{ props: menuProps }">
+              <v-btn
+                v-bind="menuProps"
+                icon="mdi-palette"
+                variant="text"
+                :title="t('viewer.bg_color')"
+                class="mr-1"
+              >
+                <v-icon :style="{ color: bg }">mdi-circle</v-icon>
+              </v-btn>
+            </template>
+            <div class="st-bg-menu pa-3">
+              <div class="text-caption font-weight-bold mb-2">{{ t("viewer.bg_color") }}</div>
+              <div class="d-flex align-center ga-2 mb-2">
+                <div
+                  v-for="c in BG_PRESETS"
+                  :key="c"
+                  class="viewer-swatch"
+                  :class="{ active: bg.toLowerCase() === c.toLowerCase() }"
+                  :style="{ background: c }"
+                  @click="setBgColor(c)"
+                />
+              </div>
+              <div class="d-flex align-center ga-2 pt-1 border-t-2" style="border-color: rgba(255,255,255,0.1)">
+                <span class="st-mono text-caption">{{ bg }}</span>
+                <v-spacer />
+                <label class="viewer-swatch custom d-flex align-center justify-center">
+                  <v-icon icon="mdi-eyedropper-variant" size="14" />
+                  <input
+                    type="color"
+                    class="color-input"
+                    :value="bg"
+                    @input="setBgColor(($event.target as HTMLInputElement).value)"
+                  />
+                </label>
+              </div>
+            </div>
+          </v-menu>
+
+          <v-btn
+            :icon="aiEnabled ? 'mdi-motion-sensor' : 'mdi-motion-sensor-off'"
+            :variant="aiEnabled ? 'flat' : 'text'"
+            :color="aiEnabled ? 'primary' : undefined"
+            :title="t('viewer.ai')"
+            class="ml-1"
+            @click="toggleAI"
+          />
+          <v-btn
+            :icon="fullscreen ? 'mdi-fullscreen-exit' : 'mdi-fullscreen'"
+            variant="text"
+            :title="t('viewer.fullscreen')"
+            @click="toggleFullscreen"
+          />
+        </div>
+
+        <div class="ml-2 flex-shrink-0" style="-webkit-app-region: no-drag">
+          <WindowControls />
+        </div>
       </div>
     </div>
 
@@ -261,6 +269,7 @@ import {
   type Sensitivity,
 } from "@/lib/headshake";
 import { isTypingTarget, matchCombo } from "@/lib/shortcuts";
+import WindowControls from "@/components/WindowControls.vue";
 
 const route = useRoute();
 const router = useRouter();

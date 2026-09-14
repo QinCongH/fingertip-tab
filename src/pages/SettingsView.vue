@@ -1,36 +1,47 @@
 <template>
-  <div class="settings-root d-flex" :style="{ background: 'var(--st-black)' }">
-    <!-- 左侧分类导航 -->
-    <div class="side pa-6 d-flex flex-column">
-      <v-btn
-        variant="text"
-        prepend-icon="mdi-arrow-left"
-        class="align-self-start mb-6"
-        @click="router.push('/')"
-      >
-        {{ t("app.name") }}
-      </v-btn>
-      <div class="st-display text-h4 mb-8">{{ t("settings.title") }}</div>
-
-      <div
-        v-for="sec in sections"
-        :key="sec.value"
-        class="st-nav-item pa-3 mb-1 d-flex align-center ga-3 st-clickable"
-        :class="{ 'st-nav-item--active': active === sec.value }"
-        @click="active = sec.value"
-      >
-        <v-icon size="20">{{ sec.icon }}</v-icon>
-        <span class="text-body-2 font-weight-bold">{{ sec.title }}</span>
+  <div class="settings-root d-flex flex-column" :style="{ background: 'var(--st-black)' }">
+    <!-- 顶部拖拽栏及窗口控制 -->
+    <div class="settings-titlebar d-flex align-center justify-space-between px-6" data-tauri-drag-region>
+      <div class="st-mono text-caption" data-tauri-drag-region style="opacity: 0.6">
+        {{ t("settings.title") }} · {{ t("app.name") }}
       </div>
-
-      <v-spacer />
-      <v-btn variant="tonal" prepend-icon="mdi-restore" block @click="resetOpen = true">
-        {{ t("settings.reset") }}
-      </v-btn>
+      <WindowControls />
     </div>
 
-    <!-- 右侧内容 -->
-    <div class="content pa-10" style="overflow-y: auto; height: 100vh; flex: 1">
+    <div class="d-flex flex-grow-1" style="height: calc(100vh - 42px); overflow: hidden">
+      <!-- 左侧分类导航 -->
+      <div class="side pa-6 d-flex flex-column" data-tauri-drag-region>
+        <v-btn
+          variant="text"
+          prepend-icon="mdi-arrow-left"
+          class="align-self-start mb-6"
+          style="-webkit-app-region: no-drag"
+          @click="router.push('/')"
+        >
+          {{ t("app.name") }}
+        </v-btn>
+        <div class="st-display text-h4 mb-8" data-tauri-drag-region>{{ t("settings.title") }}</div>
+
+        <div
+          v-for="sec in sections"
+          :key="sec.value"
+          class="st-nav-item pa-3 mb-1 d-flex align-center ga-3 st-clickable"
+          :class="{ 'st-nav-item--active': active === sec.value }"
+          style="-webkit-app-region: no-drag"
+          @click="active = sec.value"
+        >
+          <v-icon size="20">{{ sec.icon }}</v-icon>
+          <span class="text-body-2 font-weight-bold">{{ sec.title }}</span>
+        </div>
+
+        <v-spacer data-tauri-drag-region />
+        <v-btn variant="tonal" prepend-icon="mdi-restore" block style="-webkit-app-region: no-drag" @click="resetOpen = true">
+          {{ t("settings.reset") }}
+        </v-btn>
+      </div>
+
+      <!-- 右侧内容 -->
+      <div class="content pa-10" style="overflow-y: auto; height: 100%; flex: 1">
       <!-- ============ 通用 ============ -->
       <template v-if="active === 'general'">
         <div class="st-display text-h3 mb-8">{{ t("settings.tab_general") }}</div>
@@ -328,7 +339,9 @@
         <div class="st-mono mb-8">FINGERTIP TABS</div>
 
         <div class="d-flex align-center ga-4 mb-8">
-          <div class="brand-big">♪</div>
+          <div class="brand-big">
+            <img src="/logo.svg" alt="Logo" class="brand-logo-img" />
+          </div>
           <div>
             <div class="st-display text-h5">{{ t("app.name") }}</div>
             <div class="text-body-2" style="opacity: 0.5">{{ t("settings.about_desc") }}</div>
@@ -385,6 +398,7 @@
       danger
       @confirm="doReset"
     />
+    </div>
   </div>
 </template>
 
@@ -400,6 +414,7 @@ import { useSettingsStore } from "@/stores/settings";
 import { useToastStore, errText } from "@/stores/toast";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import ShortcutInput from "@/components/ShortcutInput.vue";
+import WindowControls from "@/components/WindowControls.vue";
 import { listCameras } from "@/lib/headshake";
 
 const router = useRouter();
@@ -544,28 +559,35 @@ function setShortcut(key: keyof typeof s.shortcuts, combo: string) {
 // 关于
 // ---------------------------------------------------------------------------
 
-const version = ref("0.1.0");
+const version = ref("0.2.0");
 onMounted(async () => {
   try {
     version.value = await getVersion();
   } catch {
-    version.value = "0.1.0";
+    version.value = "0.2.0";
   }
   void probeCameras();
 });
 
-const REPO_URL = "https://github.com/hehehei/fingertip-tab";
+const UPDATE_URL = "https://github.com/QinCongH/fingertip-tab/tags";
+const HELP_URL = "https://github.com/QinCongH/fingertip-tab/blob/main/README.md";
+
 function openReleases() {
-  void openUrl(`${REPO_URL}/releases`);
+  void openUrl(UPDATE_URL);
 }
 function openHelp() {
-  void openUrl(REPO_URL);
+  void openUrl(HELP_URL);
 }
 </script>
 
 <style scoped>
 .settings-root {
   height: 100vh;
+}
+.settings-titlebar {
+  height: 42px;
+  background: var(--st-deep);
+  border-bottom: 2px solid var(--st-border);
 }
 .side {
   width: 300px;
@@ -614,13 +636,18 @@ function openHelp() {
 .brand-big {
   width: 64px;
   height: 64px;
-  background: var(--st-coral);
-  color: #fff;
+  background: var(--st-gray-900);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 34px;
-  font-weight: 900;
   flex-shrink: 0;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 </style>

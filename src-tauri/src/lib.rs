@@ -38,6 +38,38 @@ pub fn run() {
                     }
                 }
             });
+
+            // 监听窗口事件：在关闭时保存窗口大小与位置
+            if let Some(window) = app.get_webview_window("main") {
+                let w = window.clone();
+                let h = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        if let (Ok(scale), Ok(pos), Ok(size), Ok(maximized)) = (
+                            w.scale_factor(),
+                            w.outer_position(),
+                            w.outer_size(),
+                            w.is_maximized(),
+                        ) {
+                            let last_window = commands::settings::WindowState {
+                                x: Some(pos.x as f64 / scale),
+                                y: Some(pos.y as f64 / scale),
+                                width: Some(size.width as f64 / scale),
+                                height: Some(size.height as f64 / scale),
+                                maximized: Some(maximized),
+                            };
+                            let h_clone = h.clone();
+                            tauri::async_runtime::block_on(async move {
+                                if let Ok(mut cfg) = commands::settings::read_app_config(&h_clone).await {
+                                    cfg.last_window = Some(last_window);
+                                    let _ = commands::settings::write_app_config(&h_clone, &cfg).await;
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

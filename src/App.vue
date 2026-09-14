@@ -24,7 +24,6 @@
 import { computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useTheme } from "vuetify";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api } from "@/lib/tauri";
 import { useToastStore } from "@/stores/toast";
 import { useSettingsStore } from "@/stores/settings";
@@ -51,30 +50,6 @@ watch(
   },
   { immediate: true },
 );
-
-// 窗口关闭前持久化窗口状态
-const appWindow = getCurrentWindow();
-appWindow.onCloseRequested(async () => {
-  try {
-    const scale = await appWindow.scaleFactor();
-    const pos = await appWindow.outerPosition();
-    const size = await appWindow.outerSize();
-    const maximized = await appWindow.isMaximized();
-    const cfg = await api.getAppConfig();
-    await api.saveAppConfig({
-      ...cfg,
-      lastWindow: {
-        x: pos.x / scale,
-        y: pos.y / scale,
-        width: size.width / scale,
-        height: size.height / scale,
-        maximized,
-      },
-    });
-  } catch {
-    // 保存失败不阻止关闭
-  }
-});
 
 onMounted(async () => {
   await settings.load();

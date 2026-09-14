@@ -1,13 +1,13 @@
 <template>
   <v-navigation-drawer permanent :width="252" class="st-panel">
-    <!-- 品牌区 -->
-    <div class="pa-5 d-flex align-center ga-3">
-      <div class="brand-block">
+    <!-- 品牌区（允许拖拽窗口） -->
+    <div class="pa-5 d-flex align-center ga-3" data-tauri-drag-region style="cursor: default">
+      <div class="brand-block" style="-webkit-app-region: no-drag">
         <img src="/logo.svg" alt="Logo" class="brand-logo-img" />
       </div>
-      <div class="min-width-0">
-        <div class="st-display" style="font-size: 19px">{{ t("app.name") }}</div>
-        <div class="st-mono">FINGERTIP TABS</div>
+      <div class="min-width-0" data-tauri-drag-region>
+        <div class="st-display" style="font-size: 19px" data-tauri-drag-region>{{ t("app.name") }}</div>
+        <div class="st-mono" data-tauri-drag-region>FINGERTIP TABS</div>
       </div>
     </div>
 
