@@ -1,0 +1,22 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- 指尖乐谱 · 变体5：乐谱页点阵（点阵填充几何） -->
+  <!-- 乐谱页面：方正容器，无圆角 -->
+  <rect x="24" y="16" width="52" height="68" fill="none" stroke="#1A1A1A" stroke-width="3.5"/>
+  <!-- 底噪点阵：低透明度铺底 -->
+  <g fill="#1A1A1A" opacity="0.25">
+    <circle cx="34" cy="28" r="1.8"/><circle cx="44" cy="28" r="1.8"/><circle cx="54" cy="28" r="1.8"/>
+    <circle cx="34" cy="38" r="1.8"/><circle cx="44" cy="38" r="1.8"/><circle cx="54" cy="38" r="1.8"/>
+    <circle cx="34" cy="48" r="1.8"/><circle cx="44" cy="48" r="1.8"/><circle cx="54" cy="48" r="1.8"/><circle cx="64" cy="48" r="1.8"/>
+    <circle cx="34" cy="58" r="1.8"/><circle cx="44" cy="58" r="1.8"/><circle cx="54" cy="58" r="1.8"/><circle cx="64" cy="58" r="1.8"/>
+    <circle cx="34" cy="68" r="1.8"/><circle cx="44" cy="68" r="1.8"/><circle cx="54" cy="68" r="1.8"/><circle cx="64" cy="68" r="1.8"/>
+  </g>
+  <!-- 上行旋律：加粗音符点 -->
+  <g fill="#1A1A1A">
+    <circle cx="34" cy="68" r="3.2"/>
+    <circle cx="44" cy="58" r="3.2"/>
+    <circle cx="54" cy="48" r="3.2"/>
+    <circle cx="64" cy="38" r="3.2"/>
+  </g>
+  <!-- 珊瑚色高音终点 -->
+  <circle cx="66" cy="26" r="4.2" fill="#FF6B6B"/>
+</svg>

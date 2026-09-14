@@ -1,0 +1,346 @@
+/* ============================================================
+   指尖乐谱 — Studio Bold 全局样式（md/页面风格.md）
+   方角、色块分区、珊瑚色点睛、无渐变、悬停必须值得等
+   ============================================================ */
+
+:root {
+  --st-black: #1a1a1a;
+  --st-deep: #0d0d0d;
+  --st-light: #f5f5f0;
+  --st-light-2: #edede6;
+  --st-coral: #ff6b6b;
+  --st-coral-deep: #e55a5a;
+  --st-grey: #333333;
+  --st-border: rgba(255, 255, 255, 0.2);
+  --st-border-light: rgba(26, 26, 26, 0.15);
+  --st-text: #ffffff;
+  --st-text-muted: rgba(255, 255, 255, 0.55);
+  font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 浅色主题：重映射色板变量（html.theme-light 由设置即时切换） */
+html.theme-light {
+  --st-black: #f5f5f0;
+  --st-deep: #edede6;
+  --st-grey: #e0e0d6;
+  --st-border: rgba(26, 26, 26, 0.25);
+  --st-text: #1a1a1a;
+  --st-text-muted: rgba(26, 26, 26, 0.6);
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  background: var(--st-black);
+  color: var(--st-text);
+}
+
+/* ---------- Vuetify 方角化（rounded-none） ---------- */
+.v-btn,
+.v-card,
+.v-field,
+.v-overlay__content > .v-card,
+.v-snackbar__wrapper,
+.v-toolbar,
+.v-list-item,
+.v-chip,
+.v-navigation-drawer,
+.v-sheet:not(.v-slider-thumb__surface),
+.v-alert,
+.v-tooltip > .v-overlay__content,
+.v-menu > .v-overlay__content,
+.v-text-field,
+.v-select,
+.v-combobox,
+.v-number-input {
+  border-radius: 0 !important;
+}
+
+.v-btn {
+  text-transform: none !important;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: all 0.3s ease !important;
+}
+.v-btn:hover {
+  opacity: 0.9;
+}
+.v-btn:active {
+  transform: scale(0.98);
+}
+.v-btn--variant-flat.bg-primary,
+.v-btn--variant-flat.bg-coral {
+  background: var(--st-coral) !important;
+}
+.v-btn--variant-flat.bg-primary:hover,
+.v-btn--variant-flat.bg-coral:hover {
+  background: var(--st-coral-deep) !important;
+}
+
+/* 输入框：#333333 底 + 底边线，聚焦珊瑚色 */
+.v-field {
+  background: var(--st-grey) !important;
+  border: 0 !important;
+  border-bottom: 2px solid var(--st-border) !important;
+  box-shadow: none !important;
+  transition: border-color 0.3s ease;
+}
+.v-field--focused {
+  border-bottom-color: var(--st-coral) !important;
+}
+.v-field__outline,
+.v-field__outline::before,
+.v-field__outline::after {
+  display: none !important;
+}
+.v-label {
+  opacity: 0.6 !important;
+}
+.v-input--density-compact .v-field {
+  --v-input-control-height: 44px;
+}
+
+/* 列表项 */
+.v-list-item {
+  transition: all 0.3s ease;
+}
+.v-list-item--active {
+  color: var(--st-coral) !important;
+}
+.v-list-item--active .v-list-item__overlay {
+  opacity: 0.08;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+  background-clip: content-box;
+}
+
+/* ---------- Studio Bold 组件类 ---------- */
+
+/* 浅色卡片（曲谱库项目卡） */
+.st-card {
+  background: var(--st-light);
+  color: var(--st-black);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+html.theme-light .st-card {
+  background: #fbfbf6;
+  box-shadow: inset 0 0 0 2px var(--st-border-light);
+}
+.st-card:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+}
+.st-card:active {
+  transform: scale(0.99);
+}
+
+/* 深色块容器 */
+.st-panel {
+  background: var(--st-deep);
+}
+
+/* 超大标题 */
+.st-display {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+}
+
+/* 等宽小字 */
+.st-mono {
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  opacity: 0.5;
+  color: var(--st-text);
+}
+
+/* 悬停标记线 */
+.st-nav-item {
+  position: relative;
+  transition: all 0.3s ease;
+}
+.st-nav-item:hover {
+  background: rgba(255, 107, 107, 0.08);
+  color: var(--st-coral);
+}
+.st-nav-item--active {
+  color: var(--st-coral);
+}
+.st-nav-item--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--st-coral);
+}
+
+/* 珊瑚色块标记 */
+.st-chip-coral {
+  background: var(--st-coral);
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 8px;
+  letter-spacing: 0.04em;
+}
+.st-chip-line {
+  border: 2px solid var(--st-border);
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 8px;
+  letter-spacing: 0.04em;
+}
+/* 浅色卡片内部一律使用深色描边芯片 */
+.st-card .st-chip-line {
+  border-color: rgba(26, 26, 26, 0.25);
+  color: rgba(26, 26, 26, 0.72);
+}
+.theme-light .st-chip-line {
+  border-color: var(--st-border);
+  color: var(--st-text-muted);
+}
+
+/* 拖拽导入遮罩 */
+.st-dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  background: rgba(13, 13, 13, 0.86);
+  border: 4px solid var(--st-coral);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+/* 看谱翻页动画 */
+.page-flip-enter-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.page-flip-leave-active {
+  transition: opacity 0.12s ease;
+}
+.page-flip-enter-from {
+  opacity: 0;
+  transform: translateX(24px);
+}
+.page-flip-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+/* AI 翻页成功边缘闪烁（绿色光芒） */
+@keyframes st-page-flash {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(76, 175, 125, 0);
+  }
+  30% {
+    box-shadow: inset 0 0 140px 10px rgba(76, 175, 125, 0.55);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(76, 175, 125, 0);
+  }
+}
+.st-page-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2600;
+  animation: st-page-flash 0.7s ease-out;
+}
+
+/* 摄像头小窗 */
+.st-camera-pip {
+  position: fixed;
+  right: 20px;
+  bottom: 96px;
+  width: 200px;
+  z-index: 2450;
+  background: var(--st-deep);
+  border: 2px solid var(--st-border);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* 看谱页悬浮工具栏 */
+.st-viewer-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 2500;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  background: rgba(13, 13, 13, 0.88);
+  backdrop-filter: blur(8px);
+  border-color: var(--st-border);
+}
+.st-viewer-bar--top {
+  top: 0;
+  border-bottom: 2px solid var(--st-border);
+}
+.st-viewer-bar--bottom {
+  bottom: 0;
+  border-top: 2px solid var(--st-border);
+}
+.st-viewer-bar--hidden {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+.st-viewer-bar--hidden.st-viewer-bar--bottom {
+  transform: translateY(8px);
+}
+
+/* 通用工具 */
+.st-clickable {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.st-clickable:hover {
+  color: var(--st-coral);
+}
+.text-coral {
+  color: var(--st-coral) !important;
+}
+.bg-coral {
+  background: var(--st-coral) !important;
+}
+.bg-deep {
+  background: var(--st-deep) !important;
+}
+.theme-light .bg-deep {
+  background: var(--st-light-2) !important;
+}
+.st-divider {
+  border-top: 2px solid var(--st-border);
+}
+.theme-light .st-divider {
+  border-color: var(--st-border-light);
+}

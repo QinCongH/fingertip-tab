@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>指尖乐谱 — Logo 设计探索</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #F5F5F0; color: #1A1A1A; }
+  .font-mono { font-family: 'JetBrains Mono', 'Courier New', monospace; }
+  html { scroll-behavior: smooth; }
+
+  /* 悬挂式导航：珊瑚色块状标记 */
+  .nav-link { position: relative; transition: color .3s; }
+  .nav-link::after { content: ''; position: absolute; left: 0; bottom: -6px; width: 0; height: 4px; background: #FF6B6B; transition: width .3s; }
+  .nav-link:hover { color: #FF6B6B; }
+  .nav-link:hover::after { width: 100%; }
+
+  /* 项目卡片即海报：悬停四连击 */
+  .logo-card { transition: all .3s; }
+  .logo-card:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 25px 50px -12px rgba(0,0,0,.4); border-color: #FF6B6B; }
+  .logo-card:hover .card-index { background: #FF6B6B; color: #fff; }
+  .logo-card:hover .logo-main svg { transform: scale(1.08) rotate(-3deg); }
+  .logo-main svg { transition: transform .3s; }
+
+  /* 色块标题划线 */
+  .coral-mark { background: #FF6B6B; color: #fff; padding: 0 .35em; }
+</style>
+</head>
+<body>
+
+<!-- ======================= NAV ======================= -->
+<nav class="sticky top-0 z-50 bg-[#1A1A1A] text-white">
+  <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="w-4 h-4 bg-[#FF6B6B] inline-block"></span>
+      <span class="font-bold tracking-tight text-lg">指尖乐谱</span>
+      <span class="font-mono text-xs text-white/40 hidden md:inline">/ LOGO EXPLORATION</span>
+    </div>
+    <div class="flex gap-8 text-sm font-bold">
+      <a href="#variants" class="nav-link">方案</a>
+      <a href="#palette" class="nav-link">色彩</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ======================= HEADER ======================= -->
+<header class="bg-[#1A1A1A] text-white">
+  <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pt-24 pb-28">
+    <p class="font-mono text-xs text-white/40 uppercase tracking-[0.3em] mb-8">Logo Design Exploration — 2026</p>
+    <h1 class="text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[1.05] mb-10">
+      指尖<span class="coral-mark">乐谱</span><br>六种图形提案
+    </h1>
+    <p class="text-xl font-light text-white/60 max-w-2xl leading-relaxed mb-12">
+      以「指尖触碰乐谱」为核心意象：音符、五线谱、触点涟漪、谱号、旋律轨迹。
+      全部方案遵循创意工作室风——方正无圆角、色块驱动、珊瑚色只落在视线着陆点。
+    </p>
+    <a href="#variants" class="inline-block font-bold rounded-none transition-all duration-300 bg-[#FF6B6B] text-white px-8 py-4 hover:-translate-y-0.5 hover:opacity-90 active:scale-[0.98]">
+      查看全部方案 ↓
+    </a>
+  </div>
+</header>
+
+<!-- ======================= LOGO GRID ======================= -->
+<section id="variants" class="py-24 md:py-32">
+  <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-16">
+    <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">六种方向</h2>
+    <p class="font-mono text-sm text-[#333333]/60 mb-16">01 — 06 · 每一张卡片都是一个提案</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
+
+      <!-- ========== 方案 1 ========== -->
+      <div class="logo-card bg-[#F5F5F0] rounded-none border-2 border-[#1A1A1A] overflow-hidden group">
+        <div class="flex items-center justify-between px-6 py-4 bg-[#1A1A1A]">
+          <span class="card-index font-mono text-sm font-bold transition-all duration-300 px-2 py-1">01</span>
+          <span class="font-mono text-xs text-white/40">GEOMETRIC NOTE</span>
+        </div>
+        <div class="logo-main flex items-center justify-center h-64">
+          <svg viewBox="0 0 100 100" class="w-40 h-40 text-[#1A1A1A]">
+            <ellipse cx="38" cy="70" rx="13" ry="10" fill="currentColor" transform="rotate(-15 38 70)"/>
+            <rect x="47.5" y="22" width="7" height="47" fill="currentColor"/>
+            <path d="M 54.5 22 C 67 26 75 35 74 51 C 68 41 61 38 54.5 39 Z" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="h-16 bg-[#1A1A1A] flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-12 h-12 text-[#F5F5F0]">
+            <ellipse cx="38" cy="70" rx="13" ry="10" fill="currentColor" transform="rotate(-15 38 70)"/>
+            <rect x="47.5" y="22" width="7" height="47" fill="currentColor"/>
+            <path d="M 54.5 22 C 67 26 75 35 74 51 C 68 41 61 38 54.5 39 Z" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="p-6 md:p-8">
+          <h3 class="text-2xl md:text-3xl font-bold tracking-tight text-[#1A1A1A] mb-3">极简音符</h3>
+          <p class="text-sm leading-relaxed text-[#333333] font-light">一个音符，一笔成形。倾斜的符头 + 粗壮符杆 + 珊瑚色尾旗，纯几何、极简、任何尺寸下都清晰。最稳妥的 App 图标首选。</p>
+        </div>
+      </div>
+
+      <!-- ========== 方案 2 ========== -->
+      <div class="logo-card bg-[#F5F5F0] rounded-none border-2 border-[#1A1A1A] overflow-hidden group">
+        <div class="flex items-center justify-between px-6 py-4 bg-[#1A1A1A]">
+          <span class="card-index font-mono text-sm font-bold transition-all duration-300 px-2 py-1">02</span>
+          <span class="font-mono text-xs text-white/40">STAFF DOT MATRIX</span>
+        </div>
+        <div class="logo-main flex items-center justify-center h-64">
+          <svg viewBox="0 0 100 100" class="w-40 h-40 text-[#1A1A1A]">
+            <g fill="currentColor">
+              <rect x="22" y="29" width="56" height="3" rx="1.5"/><rect x="22" y="39" width="56" height="3" rx="1.5"/>
+              <rect x="22" y="49" width="56" height="3" rx="1.5"/><rect x="22" y="59" width="56" height="3" rx="1.5"/>
+              <rect x="22" y="69" width="56" height="3" rx="1.5"/>
+              <circle cx="33" cy="50.5" r="4.5"/><circle cx="45" cy="30.5" r="4.5"/>
+            </g>
+            <circle cx="63" cy="40.5" r="5.5" fill="#FF6B6B"/>
+            <rect x="66.5" y="22" width="2.5" height="18.5" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="h-16 bg-[#1A1A1A] flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-12 h-12 text-[#F5F5F0]">
+            <g fill="currentColor">
+              <rect x="22" y="29" width="56" height="3" rx="1.5"/><rect x="22" y="39" width="56" height="3" rx="1.5"/>
+              <rect x="22" y="49" width="56" height="3" rx="1.5"/><rect x="22" y="59" width="56" height="3" rx="1.5"/>
+              <rect x="22" y="69" width="56" height="3" rx="1.5"/>
+              <circle cx="33" cy="50.5" r="4.5"/><circle cx="45" cy="30.5" r="4.5"/>
+            </g>
+            <circle cx="63" cy="40.5" r="5.5" fill="#FF6B6B"/>
+            <rect x="66.5" y="22" width="2.5" height="18.5" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="p-6 md:p-8">
+          <h3 class="text-2xl md:text-3xl font-bold tracking-tight text-[#1A1A1A] mb-3">五线谱点阵</h3>
+          <p class="text-sm leading-relaxed text-[#333333] font-light">五条谱线撑起结构，音符以圆点落在谱线上，珊瑚色主音点亮视觉焦点。直白点题「乐谱」，信息量与识别度兼顾。</p>
+        </div>
+      </div>
+
+      <!-- ========== 方案 3 ========== -->
+      <div class="logo-card bg-[#F5F5F0] rounded-none border-2 border-[#1A1A1A] overflow-hidden group">
+        <div class="flex items-center justify-between px-6 py-4 bg-[#1A1A1A]">
+          <span class="card-index font-mono text-sm font-bold transition-all duration-300 px-2 py-1">03</span>
+          <span class="font-mono text-xs text-white/40">TOUCH RIPPLE</span>
+        </div>
+        <div class="logo-main flex items-center justify-center h-64">
+          <svg viewBox="0 0 100 100" class="w-40 h-40 text-[#1A1A1A]">
+            <g fill="none" stroke="currentColor" stroke-linecap="round">
+              <path d="M 36.1 64 A 16 16 0 0 1 63.9 64" stroke-width="4.5"/>
+              <path d="M 25.8 58 A 28 28 0 0 1 74.2 58" stroke-width="3"/>
+              <path d="M 15.4 52 A 40 40 0 0 1 84.6 52" stroke-width="2"/>
+            </g>
+            <circle cx="50" cy="72" r="6.5" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="h-16 bg-[#1A1A1A] flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-12 h-12 text-[#F5F5F0]">
+            <g fill="none" stroke="currentColor" stroke-linecap="round">
+              <path d="M 36.1 64 A 16 16 0 0 1 63.9 64" stroke-width="4.5"/>
+              <path d="M 25.8 58 A 28 28 0 0 1 74.2 58" stroke-width="3"/>
+              <path d="M 15.4 52 A 40 40 0 0 1 84.6 52" stroke-width="2"/>
+            </g>
+            <circle cx="50" cy="72" r="6.5" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="p-6 md:p-8">
+          <h3 class="text-2xl md:text-3xl font-bold tracking-tight text-[#1A1A1A] mb-3">指触涟漪</h3>
+          <p class="text-sm leading-relaxed text-[#333333] font-light">珊瑚色指尖触点，声波如涟漪层层荡开——「指尖」与「发声」两个概念在最简的图形里相遇。动态感最强，适合做动效 Logo。</p>
+        </div>
+      </div>
+
+      <!-- ========== 方案 4 ========== -->
+      <div class="logo-card bg-[#F5F5F0] rounded-none border-2 border-[#1A1A1A] overflow-hidden group">
+        <div class="flex items-center justify-between px-6 py-4 bg-[#1A1A1A]">
+          <span class="card-index font-mono text-sm font-bold transition-all duration-300 px-2 py-1">04</span>
+          <span class="font-mono text-xs text-white/40">ABSTRACT CLEF</span>
+        </div>
+        <div class="logo-main flex items-center justify-center h-64">
+          <svg viewBox="0 0 100 100" class="w-40 h-40 text-[#1A1A1A]">
+            <path d="M 52 20 C 38 24 36 38 47 45 C 60 53 63 64 56 72 C 49 80 37 77 36 67 C 35 59 42 54 50 53"
+                  fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
+            <circle cx="52" cy="19" r="4.5" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="h-16 bg-[#1A1A1A] flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-12 h-12 text-[#F5F5F0]">
+            <path d="M 52 20 C 38 24 36 38 47 45 C 60 53 63 64 56 72 C 49 80 37 77 36 67 C 35 59 42 54 50 53"
+                  fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
+            <circle cx="52" cy="19" r="4.5" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="p-6 md:p-8">
+          <h3 class="text-2xl md:text-3xl font-bold tracking-tight text-[#1A1A1A] mb-3">抽象谱号</h3>
+          <p class="text-sm leading-relaxed text-[#333333] font-light">取谱号的「结构 DNA」而非照抄字形：一道 S 形曲线一笔贯通，顶端珊瑚色圆点收束。最有人文气质，适合面向音乐学习者的定位。</p>
+        </div>
+      </div>
+
+      <!-- ========== 方案 5 ========== -->
+      <div class="logo-card bg-[#F5F5F0] rounded-none border-2 border-[#1A1A1A] overflow-hidden group">
+        <div class="flex items-center justify-between px-6 py-4 bg-[#1A1A1A]">
+          <span class="card-index font-mono text-sm font-bold transition-all duration-300 px-2 py-1">05</span>
+          <span class="font-mono text-xs text-white/40">SCORE PAGE GRID</span>
+        </div>
+        <div class="logo-main flex items-center justify-center h-64">
+          <svg viewBox="0 0 100 100" class="w-40 h-40 text-[#1A1A1A]">
+            <rect x="24" y="16" width="52" height="68" fill="none" stroke="currentColor" stroke-width="3.5"/>
+            <g fill="currentColor" opacity="0.25">
+              <circle cx="34" cy="28" r="1.8"/><circle cx="44" cy="28" r="1.8"/><circle cx="54" cy="28" r="1.8"/>
+              <circle cx="34" cy="38" r="1.8"/><circle cx="44" cy="38" r="1.8"/><circle cx="54" cy="38" r="1.8"/>
+              <circle cx="34" cy="48" r="1.8"/><circle cx="44" cy="48" r="1.8"/><circle cx="54" cy="48" r="1.8"/><circle cx="64" cy="48" r="1.8"/>
+              <circle cx="34" cy="58" r="1.8"/><circle cx="44" cy="58" r="1.8"/><circle cx="54" cy="58" r="1.8"/><circle cx="64" cy="58" r="1.8"/>
+              <circle cx="34" cy="68" r="1.8"/><circle cx="44" cy="68" r="1.8"/><circle cx="54" cy="68" r="1.8"/><circle cx="64" cy="68" r="1.8"/>
+            </g>
+            <g fill="currentColor">
+              <circle cx="34" cy="68" r="3.2"/><circle cx="44" cy="58" r="3.2"/>
+              <circle cx="54" cy="48" r="3.2"/><circle cx="64" cy="38" r="3.2"/>
+            </g>
+            <circle cx="66" cy="26" r="4.2" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="h-16 bg-[#1A1A1A] flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-12 h-12 text-[#F5F5F0]">
+            <rect x="24" y="16" width="52" height="68" fill="none" stroke="currentColor" stroke-width="3.5"/>
+            <g fill="currentColor" opacity="0.25">
+              <circle cx="34" cy="28" r="1.8"/><circle cx="44" cy="28" r="1.8"/><circle cx="54" cy="28" r="1.8"/>
+              <circle cx="34" cy="38" r="1.8"/><circle cx="44" cy="38" r="1.8"/><circle cx="54" cy="38" r="1.8"/>
+              <circle cx="34" cy="48" r="1.8"/><circle cx="44" cy="48" r="1.8"/><circle cx="54" cy="48" r="1.8"/><circle cx="64" cy="48" r="1.8"/>
+              <circle cx="34" cy="58" r="1.8"/><circle cx="44" cy="58" r="1.8"/><circle cx="54" cy="58" r="1.8"/><circle cx="64" cy="58" r="1.8"/>
+              <circle cx="34" cy="68" r="1.8"/><circle cx="44" cy="68" r="1.8"/><circle cx="54" cy="68" r="1.8"/><circle cx="64" cy="68" r="1.8"/>
+            </g>
+            <g fill="currentColor">
+              <circle cx="34" cy="68" r="3.2"/><circle cx="44" cy="58" r="3.2"/>
+              <circle cx="54" cy="48" r="3.2"/><circle cx="64" cy="38" r="3.2"/>
+            </g>
+            <circle cx="66" cy="26" r="4.2" fill="#FF6B6B"/>
+          </svg>
+        </div>
+        <div class="p-6 md:p-8">
+          <h3 class="text-2xl md:text-3xl font-bold tracking-tight text-[#1A1A1A] mb-3">乐谱页点阵</h3>
+          <p class="text-sm leading-relaxed text-[#333333] font-light">方正无圆角的乐谱页容器内，低透明度点阵铺底、加粗旋律点上行、珊瑚色高音收尾——一张正在被弹奏的谱面。最贴合「App 内容本身」的隐喻。</p>
+        </div>
+      </div>
+
+      <!-- ========== 方案 6 ========== -->
+      <div class="logo-card bg-[#F5F5F0] rounded-none border-2 border-[#1A1A1A] overflow-hidden group">
+        <div class="flex items-center justify-between px-6 py-4 bg-[#1A1A1A]">
+          <span class="card-index font-mono text-sm font-bold transition-all duration-300 px-2 py-1">06</span>
+          <span class="font-mono text-xs text-white/40">MELODY NETWORK</span>
+        </div>
+        <div class="logo-main flex items-center justify-center h-64">
+          <svg viewBox="0 0 100 100" class="w-40 h-40 text-[#1A1A1A]">
+            <path d="M 24 74 C 40 74 36 56 50 52 C 64 48 60 30 76 28" fill="none" stroke="currentColor" stroke-width="2.5"/>
+            <g fill="currentColor">
+              <circle cx="24" cy="74" r="5"/><rect x="22.8" y="58" width="2.5" height="16"/>
+              <circle cx="50" cy="52" r="6.5"/><rect x="48.8" y="36" width="2.5" height="16"/>
+            </g>
+            <circle cx="76" cy="28" r="5.5" fill="#FF6B6B"/>
+            <rect x="74.8" y="14" width="2.5" height="14" fill="#FF6B6B"/>
+            <circle cx="37" cy="61" r="2.5" fill="currentColor" opacity="0.45"/>
+            <circle cx="63" cy="40" r="2.5" fill="currentColor" opacity="0.45"/>
+          </svg>
+        </div>
+        <div class="h-16 bg-[#1A1A1A] flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-12 h-12 text-[#F5F5F0]">
+            <path d="M 24 74 C 40 74 36 56 50 52 C 64 48 60 30 76 28" fill="none" stroke="currentColor" stroke-width="2.5"/>
+            <g fill="currentColor">
+              <circle cx="24" cy="74" r="5"/><rect x="22.8" y="58" width="2.5" height="16"/>
+              <circle cx="50" cy="52" r="6.5"/><rect x="48.8" y="36" width="2.5" height="16"/>
+            </g>
+            <circle cx="76" cy="28" r="5.5" fill="#FF6B6B"/>
+            <rect x="74.8" y="14" width="2.5" height="14" fill="#FF6B6B"/>
+            <circle cx="37" cy="61" r="2.5" fill="currentColor" opacity="0.45"/>
+            <circle cx="63" cy="40" r="2.5" fill="currentColor" opacity="0.45"/>
+          </svg>
+        </div>
+        <div class="p-6 md:p-8">
+          <h3 class="text-2xl md:text-3xl font-bold tracking-tight text-[#1A1A1A] mb-3">旋律轨迹</h3>
+          <p class="text-sm leading-relaxed text-[#333333] font-light">把一段旋律画成节点网络：符头即节点、符杆即天线、连线即音程，终点冲向最高音。叙事性最强，讲得出故事的一个方案。</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ======================= PALETTE ======================= -->
+<section id="palette" class="py-24 md:py-32 bg-[#1A1A1A] text-white">
+  <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-16">
+    <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">色彩系统</h2>
+    <p class="font-mono text-sm text-white/40 mb-16">Creative Studio · 色块即分区</p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+      <div class="rounded-none overflow-hidden border-2 border-white/20 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF6B6B]">
+        <div class="h-32 bg-[#1A1A1A] border-b-2 border-white/20"></div>
+        <div class="p-4"><p class="font-bold">#1A1A1A</p><p class="font-mono text-xs text-white/40 mt-1">背景主色 / 图形主色</p></div>
+      </div>
+      <div class="rounded-none overflow-hidden border-2 border-white/20 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF6B6B]">
+        <div class="h-32 bg-[#F5F5F0]"></div>
+        <div class="p-4"><p class="font-bold">#F5F5F0</p><p class="font-mono text-xs text-white/40 mt-1">呼吸层 / 深底反白</p></div>
+      </div>
+      <div class="rounded-none overflow-hidden border-2 border-white/20 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF6B6B]">
+        <div class="h-32 bg-[#FF6B6B]"></div>
+        <div class="p-4"><p class="font-bold">#FF6B6B</p><p class="font-mono text-xs text-white/40 mt-1">珊瑚强调 / 视线着陆</p></div>
+      </div>
+      <div class="rounded-none overflow-hidden border-2 border-white/20 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF6B6B]">
+        <div class="h-32 bg-[#0D0D0D]"></div>
+        <div class="p-4"><p class="font-bold">#0D0D0D</p><p class="font-mono text-xs text-white/40 mt-1">更深的底 / Footer</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FOOTER ======================= -->
+<footer class="bg-[#0D0D0D] text-white">
+  <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-10">
+      <div>
+        <h2 class="text-4xl md:text-6xl font-bold tracking-tight mb-4">选一个方向，<br>我们继续<span class="coral-mark">打磨</span>。</h2>
+        <p class="font-mono text-xs text-white/40 uppercase tracking-[0.3em]">Generated with Logo Generator · 2026</p>
+      </div>
+      <div class="font-mono text-sm text-white/50 space-y-2">
+        <p>SVG 源文件：</p>
+        <p><a class="text-[#FF6B6B] hover:underline" href="logo-1.svg">logo-1.svg</a> · <a class="text-[#FF6B6B] hover:underline" href="logo-2.svg">logo-2.svg</a> · <a class="text-[#FF6B6B] hover:underline" href="logo-3.svg">logo-3.svg</a></p>
+        <p><a class="text-[#FF6B6B] hover:underline" href="logo-4.svg">logo-4.svg</a> · <a class="text-[#FF6B6B] hover:underline" href="logo-5.svg">logo-5.svg</a> · <a class="text-[#FF6B6B] hover:underline" href="logo-6.svg">logo-6.svg</a></p>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

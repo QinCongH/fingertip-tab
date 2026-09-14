@@ -1,0 +1,17 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- 指尖乐谱 · 变体2：五线谱点阵（点阵系统） -->
+  <g fill="#1A1A1A">
+    <!-- 五线谱 5 条线 -->
+    <rect x="22" y="29" width="56" height="3" rx="1.5"/>
+    <rect x="22" y="39" width="56" height="3" rx="1.5"/>
+    <rect x="22" y="49" width="56" height="3" rx="1.5"/>
+    <rect x="22" y="59" width="56" height="3" rx="1.5"/>
+    <rect x="22" y="69" width="56" height="3" rx="1.5"/>
+    <!-- 音符圆点（落在谱线上） -->
+    <circle cx="33" cy="50.5" r="4.5"/>
+    <circle cx="45" cy="30.5" r="4.5"/>
+  </g>
+  <!-- 珊瑚色主音符：点 + 上行符杆 -->
+  <circle cx="63" cy="40.5" r="5.5" fill="#FF6B6B"/>
+  <rect x="66.5" y="22" width="2.5" height="18.5" fill="#FF6B6B"/>
+</svg>
