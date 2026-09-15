@@ -559,12 +559,12 @@ function setShortcut(key: keyof typeof s.shortcuts, combo: string) {
 // 关于
 // ---------------------------------------------------------------------------
 
-const version = ref("0.2.0");
+const version = ref("0.3.0");
 onMounted(async () => {
   try {
     version.value = await getVersion();
   } catch {
-    version.value = "0.2.0";
+    version.value = "0.3.0";
   }
   void probeCameras();
 });

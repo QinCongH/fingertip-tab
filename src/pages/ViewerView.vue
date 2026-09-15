@@ -5,7 +5,12 @@
     @mousemove="onMouseMove"
   >
     <!-- 顶部悬浮工具栏 -->
-    <div class="st-viewer-bar st-viewer-bar--top" :class="{ 'st-viewer-bar--hidden': barsHidden }" data-tauri-drag-region>
+    <div
+      ref="topBarEl"
+      class="st-viewer-bar st-viewer-bar--top"
+      :class="{ 'st-viewer-bar--hidden': barsHidden }"
+      data-tauri-drag-region
+    >
       <div class="d-flex align-center px-3 ga-1" style="height: 56px" data-tauri-drag-region>
         <div class="d-flex align-center flex-grow-1 min-width-0" data-tauri-drag-region>
           <v-btn icon="mdi-arrow-left" variant="text" :title="t('viewer.back')" style="-webkit-app-region: no-drag" @click="goBack" />
@@ -101,7 +106,11 @@
     </div>
 
     <!-- 内容区 -->
-    <div v-if="song" class="viewer-content">
+    <div
+      v-if="song"
+      class="viewer-content"
+      :style="contentBoxStyle"
+    >
       <!-- 模式 1：固定翻页 -->
       <div v-if="mode === 'fixed'" class="mode-fixed" @click="onFixedClick">
         <Transition name="page-flip" mode="out-in">
@@ -158,12 +167,16 @@
       </div>
     </div>
 
-    <div v-else class="not-found">
+    <div v-else class="not-found" :style="contentBoxStyle">
       <div class="st-display text-h4">{{ loaded ? t("viewer.not_found") : t("viewer.loading") }}</div>
     </div>
 
     <!-- 底部悬浮工具栏 -->
-    <div class="st-viewer-bar st-viewer-bar--bottom" :class="{ 'st-viewer-bar--hidden': barsHidden }">
+    <div
+      ref="bottomBarEl"
+      class="st-viewer-bar st-viewer-bar--bottom"
+      :class="{ 'st-viewer-bar--hidden': barsHidden }"
+    >
       <div class="d-flex align-center px-4 ga-3" style="height: 64px">
         <!-- 翻页模式 -->
         <template v-if="mode === 'fixed'">
@@ -327,10 +340,46 @@ const zoomItems = computed(() => [
   { title: t("viewer.zoom_actual"), value: "actual" },
 ]);
 
+// ---------------------------------------------------------------------------
+// 顶部 / 底部栏高度与内容区自适应
+// ---------------------------------------------------------------------------
+
+const topBarEl = ref<HTMLElement | null>(null);
+const bottomBarEl = ref<HTMLElement | null>(null);
+const topBarHeight = ref(56);
+const bottomBarHeight = ref(64);
+
+let resizeObserver: ResizeObserver | null = null;
+
+function updateBarHeights() {
+  if (topBarEl.value) {
+    topBarHeight.value = topBarEl.value.offsetHeight;
+  }
+  if (bottomBarEl.value) {
+    bottomBarHeight.value = bottomBarEl.value.offsetHeight;
+  }
+}
+
+// 实际占位的高度：当全屏且隐藏工具栏时为 0，否则为实际测量高度
+const effectiveTopBarHeight = computed(() => (barsHidden.value ? 0 : topBarHeight.value));
+const effectiveBottomBarHeight = computed(() => (barsHidden.value ? 0 : bottomBarHeight.value));
+
+const contentHeight = computed(() => {
+  return `calc(100vh - ${effectiveTopBarHeight.value + effectiveBottomBarHeight.value}px)`;
+});
+
+const contentBoxStyle = computed(() => ({
+  height: contentHeight.value,
+  marginTop: `${effectiveTopBarHeight.value}px`,
+  marginBottom: `${effectiveBottomBarHeight.value}px`,
+  "--top-bar-h": `${effectiveTopBarHeight.value}px`,
+  "--bottom-bar-h": `${effectiveBottomBarHeight.value}px`,
+}));
+
 const zoomStyle = computed(() => {
   switch (zoomMode.value) {
     case "fit_height":
-      return { height: "100vh", width: "auto", maxWidth: "none", objectFit: "contain" as const };
+      return { height: contentHeight.value, width: "auto", maxWidth: "none", objectFit: "contain" as const };
     case "actual":
       return { maxWidth: "none", maxHeight: "none" };
     default:
@@ -338,11 +387,11 @@ const zoomStyle = computed(() => {
   }
 });
 
-/** 滚动模式：缩放样式作用于每张图片（容器本身必须保持 100vh 可滚动） */
+/** 滚动模式：缩放样式作用于每张图片（容器本身必须保持 contentHeight 可滚动） */
 const scrollImgStyle = computed(() => {
   switch (zoomMode.value) {
     case "fit_height":
-      return { height: "100vh", width: "auto", maxWidth: "none", objectFit: "contain" as const };
+      return { height: contentHeight.value, width: "auto", maxWidth: "none", objectFit: "contain" as const };
     case "actual":
       return { maxWidth: "none", maxHeight: "none" };
     default:
@@ -374,9 +423,22 @@ onMounted(async () => {
     // 忽略
   }
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("resize", updateBarHeights);
+
+  if (typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(() => {
+      updateBarHeights();
+    });
+    if (topBarEl.value) resizeObserver.observe(topBarEl.value);
+    if (bottomBarEl.value) resizeObserver.observe(bottomBarEl.value);
+  }
+  updateBarHeights();
 });
 
 onUnmounted(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  window.removeEventListener("resize", updateBarHeights);
   stopDetector();
   pauseScroll();
   window.removeEventListener("keydown", onKeydown);
@@ -665,11 +727,12 @@ function goBack() {
   min-width: 0;
 }
 .viewer-content {
-  height: 100vh;
+  height: 100%;
+  box-sizing: border-box;
 }
 .mode-fixed {
   position: relative;
-  height: 100vh;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -680,12 +743,12 @@ function goBack() {
 }
 .click-zone {
   position: fixed;
-  top: 56px;
-  bottom: 64px;
+  top: var(--top-bar-h, 56px);
+  bottom: var(--bottom-bar-h, 64px);
   cursor: pointer;
 }
 .mode-scroll {
-  height: 100vh;
+  height: 100%;
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -697,7 +760,7 @@ function goBack() {
   display: block;
 }
 .mode-dual {
-  height: 100vh;
+  height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   display: flex;
@@ -707,7 +770,7 @@ function goBack() {
   display: flex;
   flex-shrink: 0;
   width: 100vw;
-  height: 100vh;
+  height: 100%;
   box-sizing: border-box;
   padding: 0 10px;
   gap: 10px;
@@ -715,7 +778,7 @@ function goBack() {
 .dual-item {
   flex: 1 1 0;
   width: calc(50% - 5px);
-  height: 100vh;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -723,17 +786,17 @@ function goBack() {
 }
 .dual-img {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   object-fit: contain;
   display: block;
 }
 .dual-filler {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   flex-shrink: 0;
 }
 .not-found {
-  height: 100vh;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
