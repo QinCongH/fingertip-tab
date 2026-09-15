@@ -96,8 +96,8 @@ async fn insert_song_with_pages(
 
     let mut tx = state.pool.begin().await?;
     let song_id: i64 = sqlx::query(
-        "INSERT INTO songs (uuid, title, artist, album, tuning, bpm, tags, file_type, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO songs (uuid, title, artist, album, tuning, bpm, tags, file_type, format, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'image', ?, ?)",
     )
     .bind(&first.uuid)
     .bind(meta.title.trim())
@@ -485,12 +485,13 @@ pub async fn delete_song(app: AppHandle, state: tauri::State<'_, AppState>, id: 
         })
         .collect();
 
-    // 歌曲封面 uuid 对应的文件可能与 pages 不同（历史数据），也一并尝试清理
-    let cover: Option<(String, String)> = sqlx::query("SELECT uuid, file_type FROM songs WHERE id = ?")
+    // 歌曲封面 uuid 对应的文件可能与 pages 不同（历史数据），也一并尝试清理；
+    // GP 曲谱复用 uuid/file_type 存文件主体，需按 format 清理 GPFiles 目录
+    let cover: Option<(String, String, String)> = sqlx::query("SELECT uuid, file_type, format FROM songs WHERE id = ?")
         .bind(id)
         .fetch_optional(&state.pool)
         .await?
-        .map(|r| (r.get("uuid"), r.get("file_type")));
+        .map(|r| (r.get("uuid"), r.get("file_type"), r.get("format")));
 
     sqlx::query("DELETE FROM songs WHERE id = ?").bind(id).execute(&state.pool).await?;
 
@@ -498,9 +499,138 @@ pub async fn delete_song(app: AppHandle, state: tauri::State<'_, AppState>, id: 
         let _ = file::remove_file_if_exists(&lib.join("Resources/Images").join(format!("{}.{}", p.uuid, p.file_type))).await;
         let _ = file::remove_file_if_exists(&lib.join("Resources/Thumbnails").join(format!("{}_thumb.jpg", p.uuid))).await;
     }
-    if let Some((uuid, ext)) = cover {
-        let _ = file::remove_file_if_exists(&lib.join("Resources/Images").join(format!("{uuid}.{ext}"))).await;
-        let _ = file::remove_file_if_exists(&lib.join("Resources/Thumbnails").join(format!("{uuid}_thumb.jpg"))).await;
+    if let Some((uuid, ext, format)) = cover {
+        if format == "gp" {
+            let _ = file::remove_file_if_exists(&lib.join("Resources/GPFiles").join(format!("{uuid}.{ext}"))).await;
+        } else {
+            let _ = file::remove_file_if_exists(&lib.join("Resources/Images").join(format!("{uuid}.{ext}"))).await;
+            let _ = file::remove_file_if_exists(&lib.join("Resources/Thumbnails").join(format!("{uuid}_thumb.jpg"))).await;
+        }
     }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Guitar Pro 曲谱
+// ---------------------------------------------------------------------------
+
+/// 导入一首 GP 曲谱：单文件，落盘 Resources/GPFiles，format='gp'
+#[tauri::command]
+pub async fn import_gp_song(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    path: String,
+    meta: SongMetaInput,
+    collection_ids: Vec<i64>,
+) -> Result<SongDto> {
+    let title = meta.title.trim().to_string();
+    if title.is_empty() {
+        return Err(AppError::msg("请填写歌名"));
+    }
+    let src = PathBuf::from(path.trim());
+    if !tokio::fs::try_exists(&src).await.unwrap_or(false) {
+        return Err(AppError::msg(format!("文件不存在: {}", src.display())));
+    }
+    let ext = file::gp_extension_of(&src)?;
+    let size = tokio::fs::metadata(&src).await?.len();
+    if size == 0 {
+        return Err(AppError::msg("文件内容为空，不是有效的曲谱文件"));
+    }
+    if size > 200 * 1024 * 1024 {
+        return Err(AppError::msg("文件过大（超过 200MB），无法导入"));
+    }
+
+    let lib = get_library_path(&app).await?;
+    let gp_dir = lib.join("Resources/GPFiles");
+    file::ensure_dir(&gp_dir).await?;
+
+    let uuid = Uuid::new_v4().to_string();
+    let dest = gp_dir.join(format!("{uuid}.{ext}"));
+    if let Err(e) = tokio::fs::copy(&src, &dest).await {
+        return Err(AppError::msg(format!("保存曲谱文件失败: {e}")));
+    }
+
+    let now = now_ts();
+    let result = async {
+        let mut tx = state.pool.begin().await?;
+        let song_id: i64 = sqlx::query(
+            "INSERT INTO songs (uuid, title, artist, album, tuning, bpm, tags, file_type, format, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'gp', ?, ?)",
+        )
+        .bind(&uuid)
+        .bind(&title)
+        .bind(meta.artist.trim())
+        .bind(meta.album.trim())
+        .bind(meta.tuning.trim())
+        .bind(meta.bpm)
+        .bind(meta.tags.trim())
+        .bind(&ext)
+        .bind(now)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?
+        .last_insert_rowid();
+
+        for cid in &collection_ids {
+            sqlx::query("INSERT OR IGNORE INTO song_collections (song_id, collection_id) VALUES (?, ?)")
+                .bind(song_id)
+                .bind(cid)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok::<i64, AppError>(song_id)
+    }
+    .await;
+
+    let song_id = match result {
+        Ok(id) => id,
+        Err(e) => {
+            let _ = file::remove_file_if_exists(&dest).await;
+            return Err(e);
+        }
+    };
+
+    let row = sqlx::query("SELECT * FROM songs WHERE id = ?")
+        .bind(song_id)
+        .fetch_one(&state.pool)
+        .await?;
+    load_song_detail(&state.pool, crate::db::models::song_from_row(&row)).await
+}
+
+/// 读取库内 GP 文件为 base64（路径被限制在 Resources/GPFiles 内）
+#[tauri::command]
+pub async fn read_gp_file(app: AppHandle, uuid: String, file_type: String) -> Result<String> {
+    let lib = get_library_path(&app).await?;
+    let ext = file_type.to_lowercase();
+    if !file::GP_EXTS.contains(&ext.as_str()) {
+        return Err(AppError::msg(format!("不支持的曲谱格式: .{ext}")));
+    }
+    // uuid 只允许安全字符，防目录穿越
+    if uuid.is_empty() || !uuid.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err(AppError::msg("非法的曲谱标识"));
+    }
+    let path = lib.join("Resources/GPFiles").join(format!("{uuid}.{ext}"));
+    if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+        return Err(AppError::msg("曲谱文件缺失，可能已被移动或删除"));
+    }
+    let bytes = tokio::fs::read(&path).await?;
+    use base64::engine::general_purpose::STANDARD as B64;
+    Ok(B64.encode(bytes))
+}
+
+/// 保存 GP 曲谱的练习状态（JSON 文本，如速度/音轨/循环）
+#[tauri::command]
+pub async fn update_player_state(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+    player_state: Option<String>,
+) -> Result<()> {
+    sqlx::query("UPDATE songs SET player_state = ?, updated_at = ? WHERE id = ?")
+        .bind(player_state)
+        .bind(now_ts())
+        .bind(id)
+        .execute(&state.pool)
+        .await?;
     Ok(())
 }

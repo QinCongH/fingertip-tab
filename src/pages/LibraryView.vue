@@ -86,6 +86,7 @@
     <ImportDialog
       v-model="importOpen"
       :preset-paths="presetPaths"
+      :preset-format="presetFormat"
       :image-data="croppedImage"
       @imported="onImported"
     />
@@ -163,11 +164,13 @@ async function doDelete() {
 
 const importOpen = ref(false);
 const presetPaths = ref<string[]>([]);
+const presetFormat = ref<"image" | "gp">("image");
 const croppedImage = ref<string | null>(null);
 const screenshotOpen = ref(false);
 
 function openImport(paths: string[]) {
   presetPaths.value = paths;
+  if (!paths.length) presetFormat.value = "image";
   croppedImage.value = null;
   importOpen.value = true;
 }
@@ -210,10 +213,17 @@ onMounted(() => {
       } else if (event.payload.type === "drop") {
         dragOver.value = false;
         const paths = event.payload.paths ?? [];
+        const gp = paths.filter((p) => /\.(gp3|gp4|gp5|gpx|gp)$/i.test(p));
         const images = paths.filter((p) =>
           /\.(jpe?g|png|webp|bmp|gif)$/i.test(p),
         );
-        if (images.length) openImport(images);
+        if (gp.length && !images.length) {
+          presetFormat.value = "gp";
+          openImport(gp.slice(0, 1));
+        } else if (images.length) {
+          presetFormat.value = "image";
+          openImport(images);
+        }
       } else {
         dragOver.value = false;
       }

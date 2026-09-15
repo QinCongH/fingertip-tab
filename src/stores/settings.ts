@@ -29,6 +29,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
     toggle_fullscreen: "F11",
     toggle_autoscroll: "Space",
   },
+  gp_player: {
+    zoom: 1.0,
+    show_standard_notation: true,
+    show_chord_names: true,
+    count_in_beats: 0,
+    scroll_mode: "smooth",
+    metronome_volume: 60,
+    last_import_format: "image",
+  },
 };
 
 export const useSettingsStore = defineStore("settings", () => {
@@ -41,7 +50,17 @@ export const useSettingsStore = defineStore("settings", () => {
 
   async function load() {
     try {
-      settings.value = await api.getSettings();
+      const loaded = await api.getSettings();
+      // 深合并默认设置：兼容老 settings.json 缺少的新增字段（如 gp_player）
+      settings.value = {
+        ...structuredClone(DEFAULT_SETTINGS),
+        ...loaded,
+        general: { ...DEFAULT_SETTINGS.general, ...loaded.general },
+        appearance: { ...DEFAULT_SETTINGS.appearance, ...loaded.appearance },
+        ai_control: { ...DEFAULT_SETTINGS.ai_control, ...loaded.ai_control },
+        shortcuts: { ...DEFAULT_SETTINGS.shortcuts, ...loaded.shortcuts },
+        gp_player: { ...DEFAULT_SETTINGS.gp_player, ...(loaded.gp_player ?? {}) },
+      };
     } catch {
       settings.value = structuredClone(DEFAULT_SETTINGS);
     }

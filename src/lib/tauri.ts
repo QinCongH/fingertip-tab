@@ -21,6 +21,10 @@ export interface SongDto {
   bpm: number | null;
   tags: string;
   fileType: string;
+  /** 'image'：图片曲谱；'gp'：Guitar Pro 曲谱 */
+  format: string;
+  /** GP 曲谱练习状态 JSON（速度/音轨/循环等） */
+  playerState: string | null;
   createdAt: number;
   updatedAt: number;
   pages: PageDto[];
@@ -73,11 +77,26 @@ export interface ShortcutSettings {
   toggle_autoscroll: string;
 }
 
+export interface GpPlayerSettings {
+  /** 谱面缩放 0.5–2.0 */
+  zoom: number;
+  show_standard_notation: boolean;
+  show_chord_names: boolean;
+  /** 预备拍拍数：0 关闭 / 1 / 2 / 4 */
+  count_in_beats: number;
+  /** continuous | off_screen | smooth | off */
+  scroll_mode: string;
+  metronome_volume: number;
+  /** 上次导入选择的曲谱类型：image | gp */
+  last_import_format: string;
+}
+
 export interface AppSettings {
   general: GeneralSettings;
   appearance: AppearanceSettings;
   ai_control: AiControlSettings;
   shortcuts: ShortcutSettings;
+  gp_player: GpPlayerSettings;
 }
 
 export interface WindowState {
@@ -112,6 +131,12 @@ export const api = {
     meta: SongMetaInput,
     collectionIds: number[],
   ) => invoke<SongDto>("import_songs", { paths, extraImages, meta, collectionIds }),
+  importGpSong: (path: string, meta: SongMetaInput, collectionIds: number[]) =>
+    invoke<SongDto>("import_gp_song", { path, meta, collectionIds }),
+  readGpFile: (uuid: string, fileType: string) =>
+    invoke<string>("read_gp_file", { uuid, fileType }),
+  updatePlayerState: (id: number, playerState: string | null) =>
+    invoke<void>("update_player_state", { id, playerState }),
   readImageBase64: (path: string) => invoke<string>("read_image_base64", { path }),
   getSongs: (collectionId: number | null, search: string | null) =>
     invoke<SongDto[]>("get_songs", { collectionId, search }),

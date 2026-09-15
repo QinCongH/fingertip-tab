@@ -11,8 +11,21 @@
 
       <v-card-text class="pa-5">
         <v-row no-gutters>
-          <!-- 左：页面管理 -->
+          <!-- 左：页面管理（GP 曲谱无分页概念，显示文件信息） -->
           <v-col cols="12" md="5" class="pr-md-6">
+            <template v-if="isGp">
+              <div class="d-flex align-center ga-2 mb-2">
+                <span class="text-body-2 font-weight-black">{{ t("edit.gp_file") }}</span>
+              </div>
+              <div class="gp-file-info d-flex align-center ga-3 pa-4">
+                <v-icon icon="mdi-music-note-sixteenth" size="30" style="opacity: 0.5" />
+                <div class="min-width-0">
+                  <div class="text-body-2 font-weight-bold">{{ song.uuid }}.{{ song.fileType }}</div>
+                  <div class="text-caption" style="opacity: 0.5">{{ t("edit.gp_hint") }}</div>
+                </div>
+              </div>
+            </template>
+            <template v-else>
             <div class="d-flex align-center ga-2 mb-2">
               <span class="text-body-2 font-weight-black">{{ t("edit.pages_manage") }}</span>
               <span class="st-mono">{{ pages.length }}</span>
@@ -52,6 +65,7 @@
                 />
               </div>
             </div>
+            </template>
           </v-col>
 
           <!-- 右：元数据 -->
@@ -167,6 +181,7 @@ const pages = ref<PageDto[]>([]);
 const saving = ref(false);
 const adding = ref(false);
 const errorHint = ref("");
+const isGp = computed(() => props.song?.format === "gp");
 
 watch(
   () => props.modelValue,
@@ -312,5 +327,13 @@ function close() {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+.gp-file-info {
+  border: 2px solid var(--st-border);
+  background: rgba(13, 13, 13, 0.5);
+  min-height: 88px;
+}
+.min-width-0 {
+  min-width: 0;
 }
 </style>

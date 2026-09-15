@@ -299,6 +299,111 @@
         </div>
       </template>
 
+      <!-- ============ GP 播放器 ============ -->
+      <template v-else-if="active === 'gp'">
+        <div class="st-display text-h3 mb-8">{{ t("settings.tab_gp") }}</div>
+
+        <div class="setting-row">
+          <div>
+            <div class="font-weight-bold">{{ t("settings.gp_stave") }}</div>
+            <div class="text-body-2" style="opacity: 0.5">{{ t("settings.gp_stave_desc") }}</div>
+          </div>
+          <v-switch
+            v-model="s.gp_player.show_standard_notation"
+            color="primary"
+            hide-details
+            @update:model-value="saveNow"
+          />
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="font-weight-bold">{{ t("settings.gp_chords") }}</div>
+          </div>
+          <v-switch
+            v-model="s.gp_player.show_chord_names"
+            color="primary"
+            hide-details
+            @update:model-value="saveNow"
+          />
+        </div>
+
+        <div class="setting-row">
+          <div class="font-weight-bold">
+            {{ t("settings.gp_zoom") }}
+            <span class="st-mono ml-2">{{ s.gp_player.zoom.toFixed(2) }}x</span>
+          </div>
+          <v-slider
+            v-model="s.gp_player.zoom"
+            :min="0.5"
+            :max="2"
+            :step="0.05"
+            show-ticks="always"
+            tick-size="4"
+            max-width="380"
+            thumb-color="primary"
+            hide-details
+            @update:model-value="saveNow"
+          />
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="font-weight-bold">{{ t("settings.gp_count_in") }}</div>
+            <div class="text-body-2" style="opacity: 0.5">{{ t("settings.gp_count_in_desc") }}</div>
+          </div>
+          <v-btn-toggle
+            v-model="s.gp_player.count_in_beats"
+            mandatory
+            variant="outlined"
+            @update:model-value="saveNow"
+          >
+            <v-btn :value="0">{{ t("common.off") }}</v-btn>
+            <v-btn :value="1">1</v-btn>
+            <v-btn :value="2">2</v-btn>
+            <v-btn :value="4">4</v-btn>
+          </v-btn-toggle>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="font-weight-bold">{{ t("settings.gp_scroll") }}</div>
+            <div class="text-body-2" style="opacity: 0.5">{{ t("settings.gp_scroll_desc") }}</div>
+          </div>
+          <v-select
+            v-model="s.gp_player.scroll_mode"
+            :items="[
+              { title: t('gp.scroll_smooth'), value: 'smooth' },
+              { title: t('gp.scroll_continuous'), value: 'continuous' },
+              { title: t('gp.scroll_offscreen'), value: 'off_screen' },
+              { title: t('gp.scroll_off'), value: 'off' },
+            ]"
+            density="comfortable"
+            variant="underlined"
+            hide-details
+            max-width="220"
+            @update:model-value="saveNow"
+          />
+        </div>
+
+        <div class="setting-row">
+          <div class="font-weight-bold">
+            {{ t("settings.gp_metronome_vol") }}
+            <span class="st-mono ml-2">{{ s.gp_player.metronome_volume }}</span>
+          </div>
+          <v-slider
+            v-model="s.gp_player.metronome_volume"
+            :min="0"
+            :max="100"
+            :step="5"
+            max-width="380"
+            thumb-color="primary"
+            hide-details
+            @update:model-value="saveNow"
+          />
+        </div>
+      </template>
+
       <!-- ============ 快捷键 ============ -->
       <template v-else-if="active === 'shortcuts'">
         <div class="st-display text-h3 mb-8">{{ t("settings.tab_shortcuts") }}</div>
@@ -427,6 +532,7 @@ const sections = computed(() => [
   { value: "general", icon: "mdi-tune-vertical-variant", title: t("settings.tab_general") },
   { value: "display", icon: "mdi-television-classic", title: t("settings.tab_display") },
   { value: "ai", icon: "mdi-motion-sensor", title: t("settings.tab_ai") },
+  { value: "gp", icon: "mdi-guitar-electric", title: t("settings.tab_gp") },
   { value: "shortcuts", icon: "mdi-keyboard", title: t("settings.tab_shortcuts") },
   { value: "about", icon: "mdi-information-outline", title: t("settings.tab_about") },
 ]);

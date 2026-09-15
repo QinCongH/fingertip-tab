@@ -28,5 +28,13 @@ pub async fn init_db(db_path: &Path) -> Result<SqlitePool> {
         .execute(&pool)
         .await?;
 
+    // 幂等迁移：老库补充 v0.3.0 新增列（重复执行报 duplicate column，忽略）
+    for stmt in [
+        "ALTER TABLE songs ADD COLUMN format TEXT NOT NULL DEFAULT 'image'",
+        "ALTER TABLE songs ADD COLUMN player_state TEXT",
+    ] {
+        let _ = sqlx::query(stmt).execute(&pool).await;
+    }
+
     Ok(pool)
 }

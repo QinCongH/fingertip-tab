@@ -1,12 +1,13 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import { alphaTab } from "@coderline/alphatab-vite";
 import { fileURLToPath, URL } from "node:url";
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
-  plugins: [vue()],
+  plugins: [vue(), alphaTab()],
 
   resolve: {
     alias: {

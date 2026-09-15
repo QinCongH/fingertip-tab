@@ -24,6 +24,10 @@ pub struct SongDto {
     pub bpm: Option<i64>,
     pub tags: String,
     pub file_type: String,
+    /// 'image'：图片曲谱；'gp'：Guitar Pro 曲谱
+    pub format: String,
+    /// GP 曲谱练习状态 JSON（速度/音轨/循环等）
+    pub player_state: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
     pub pages: Vec<PageDto>,
@@ -76,6 +80,8 @@ fn row_to_song(row: &SqliteRow) -> SongDto {
         bpm: row.get("bpm"),
         tags: row.get("tags"),
         file_type: row.get("file_type"),
+        format: row.get("format"),
+        player_state: row.get("player_state"),
         created_at: row.get("created_at"),
         updated_at: row.get("updated_at"),
         pages: Vec::new(),

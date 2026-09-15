@@ -6,6 +6,9 @@ use crate::error::{AppError, Result};
 /// 支持的图片扩展名白名单
 pub const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "bmp", "gif"];
 
+/// 支持的 Guitar Pro 扩展名白名单
+pub const GP_EXTS: &[&str] = &["gp3", "gp4", "gp5", "gpx", "gp"];
+
 pub fn extension_of(path: &Path) -> Result<String> {
     let ext = path
         .extension()
@@ -16,6 +19,22 @@ pub fn extension_of(path: &Path) -> Result<String> {
         return Err(AppError::msg(format!(
             "不支持的图片格式: .{ext}（支持 {}）",
             IMAGE_EXTS.join("/")
+        )));
+    }
+    Ok(ext)
+}
+
+/// 校验并返回 GP 文件扩展名（小写）
+pub fn gp_extension_of(path: &Path) -> Result<String> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .ok_or_else(|| AppError::msg(format!("文件缺少扩展名: {}", path.display())))?;
+    if !GP_EXTS.contains(&ext.as_str()) {
+        return Err(AppError::msg(format!(
+            "不支持的曲谱格式: .{ext}（支持 {}）",
+            GP_EXTS.join("/")
         )));
     }
     Ok(ext)

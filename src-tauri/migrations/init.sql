@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS songs (
     bpm INTEGER,
     tags TEXT NOT NULL DEFAULT '',
     file_type TEXT NOT NULL DEFAULT 'jpg',
+    -- 'image'：图片曲谱（多页）；'gp'：Guitar Pro 曲谱（单文件）
+    format TEXT NOT NULL DEFAULT 'image',
+    -- GP 曲谱的练习状态（JSON：速度/音轨混音/循环区间等），图片谱为 NULL
+    player_state TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

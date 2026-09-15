@@ -19,12 +19,13 @@
               {{ song?.title || "…" }}
             </div>
             <div class="st-mono text-truncate" data-tauri-drag-region>
-              {{ song?.artist }} · {{ modeItems.find((m) => m.value === mode)?.title }}
+              {{ song?.artist }} · {{ modeTitle }}
             </div>
           </div>
         </div>
 
         <div class="d-flex align-center ga-1" style="-webkit-app-region: no-drag">
+          <template v-if="!isGp">
           <v-btn-toggle v-model="mode" mandatory density="comfortable" class="mr-2" variant="outlined">
             <v-btn v-for="m in modeItems" :key="m.value" :value="m.value">
               <v-icon size="20">{{ m.icon }}</v-icon>
@@ -41,6 +42,10 @@
             max-width="150"
             class="mr-1"
           />
+          </template>
+          <v-chip v-else size="small" variant="tonal" color="primary" class="mr-2" prepend-icon="mdi-music-note-sixteenth">
+            GP
+          </v-chip>
 
           <!-- 背景颜色设置 -->
           <v-menu :close-on-content-click="false" location="bottom end">
@@ -84,6 +89,7 @@
           </v-menu>
 
           <v-btn
+            v-if="!isGp"
             :icon="aiEnabled ? 'mdi-motion-sensor' : 'mdi-motion-sensor-off'"
             :variant="aiEnabled ? 'flat' : 'text'"
             :color="aiEnabled ? 'primary' : undefined"
@@ -111,6 +117,10 @@
       class="viewer-content"
       :style="contentBoxStyle"
     >
+      <!-- GP 曲谱：AlphaTab 查看器 -->
+      <GpViewer v-if="isGp" :song="song" :bg="bg" :bars-hidden="barsHidden" />
+
+      <template v-else>
       <!-- 模式 1：固定翻页 -->
       <div v-if="mode === 'fixed'" class="mode-fixed" @click="onFixedClick">
         <Transition name="page-flip" mode="out-in">
@@ -165,14 +175,16 @@
           </div>
         </div>
       </div>
+      </template>
     </div>
 
     <div v-else class="not-found" :style="contentBoxStyle">
       <div class="st-display text-h4">{{ loaded ? t("viewer.not_found") : t("viewer.loading") }}</div>
     </div>
 
-    <!-- 底部悬浮工具栏 -->
+    <!-- 底部悬浮工具栏（图片谱专用，GP 由 GpViewer 自带控制条） -->
     <div
+      v-if="song && !isGp"
       ref="bottomBarEl"
       class="st-viewer-bar st-viewer-bar--bottom"
       :class="{ 'st-viewer-bar--hidden': barsHidden }"
@@ -283,6 +295,7 @@ import {
 } from "@/lib/headshake";
 import { isTypingTarget, matchCombo } from "@/lib/shortcuts";
 import WindowControls from "@/components/WindowControls.vue";
+import GpViewer from "@/components/GpViewer.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -298,6 +311,7 @@ const appWindow = getCurrentWindow();
 const songId = Number(route.params.id);
 const song = ref<SongDto | null>(null);
 const loaded = ref(false);
+const isGp = computed(() => song.value?.format === "gp");
 
 const mode = ref<"fixed" | "scroll" | "dual_horizontal">(
   (settings.settings.appearance.default_view_mode as "fixed" | "scroll" | "dual_horizontal") || "fixed",
@@ -333,6 +347,10 @@ const modeItems = computed(() => [
   { value: "scroll" as const, icon: "mdi-arrow-expand-vertical", title: t("viewer.mode_scroll") },
   { value: "dual_horizontal" as const, icon: "mdi-book-open-blank-variant", title: t("viewer.mode_dual") },
 ]);
+
+const modeTitle = computed(() =>
+  isGp.value ? t("gp.title") : (modeItems.value.find((m) => m.value === mode.value)?.title ?? ""),
+);
 
 const zoomItems = computed(() => [
   { title: t("viewer.zoom_fit_width"), value: "fit_width" },
@@ -561,7 +579,7 @@ function togglePlay() {
 }
 
 function playScroll() {
-  if (mode.value === "fixed") return;
+  if (mode.value === "fixed" || isGp.value) return;
   playing.value = true;
   lastTs = performance.now();
   subpixelPos = 0;
@@ -691,6 +709,7 @@ function onKeydown(e: KeyboardEvent) {
     void toggleFullscreen();
     return;
   }
+  if (isGp.value) return; // GP 模式下翻页/自动滚动快捷键由播放器控制
   if (matchCombo(e, sc.next_page)) {
     e.preventDefault();
     pageTurn(1);

@@ -10,9 +10,52 @@
       <div class="st-divider mx-5" />
 
       <v-card-text class="pa-5">
+        <!-- 曲谱类型选择 -->
+        <v-btn-toggle v-model="importFormat" mandatory density="comfortable" variant="outlined" class="mb-5">
+          <v-btn value="image" prepend-icon="mdi-image-multiple-outline">
+            {{ t("import.type_image") }}
+          </v-btn>
+          <v-btn value="gp" prepend-icon="mdi-music-note-sixteenth">
+            {{ t("import.type_gp") }}
+          </v-btn>
+        </v-btn-toggle>
+
         <v-row no-gutters>
-          <!-- 左：页面列表 -->
+          <!-- 左：页面列表（图片模式）/ 单文件选择（GP 模式） -->
           <v-col cols="12" md="5" class="pr-md-6">
+            <!-- ===== GP 模式：单文件 ===== -->
+            <template v-if="importFormat === 'gp'">
+              <div class="d-flex align-center ga-2 mb-2">
+                <span class="text-body-2 font-weight-black">{{ t("import.gp_file") }}</span>
+                <v-spacer />
+                <v-btn size="small" variant="tonal" prepend-icon="mdi-file-music-outline" @click="pickGpFile">
+                  {{ gpPath ? t("import.gp_reselect") : t("import.gp_select") }}
+                </v-btn>
+              </div>
+              <div class="text-body-2 mb-3" style="opacity: 0.5">{{ t("import.gp_hint") }}</div>
+
+              <div class="gp-file-box d-flex align-center ga-3 pa-4">
+                <v-icon icon="mdi-music-note-sixteenth" size="30" style="opacity: 0.5" />
+                <div class="min-width-0 flex-grow-1">
+                  <div class="text-body-2 font-weight-bold text-truncate">
+                    {{ gpPath ? gpFileName : t("import.gp_empty") }}
+                  </div>
+                  <div v-if="gpPath" class="st-mono text-caption text-truncate" style="opacity: 0.45">
+                    {{ gpPath }}
+                  </div>
+                </div>
+                <v-icon
+                  v-if="gpPath"
+                  size="18"
+                  icon="mdi-close"
+                  class="st-clickable flex-shrink-0"
+                  @click="gpPath = ''"
+                />
+              </div>
+            </template>
+
+            <!-- ===== 图片模式：多页 ===== -->
+            <template v-else>
             <div class="d-flex align-center ga-2 mb-2">
               <span class="text-body-2 font-weight-black">{{ t("import.pages") }}</span>
               <span class="st-mono">{{ pages.length }}</span>
@@ -54,6 +97,7 @@
                 <span class="text-body-2" style="opacity: 0.45">{{ t("import.select_files") }}</span>
               </div>
             </div>
+            </template>
           </v-col>
 
           <!-- 右：元数据 -->
@@ -68,7 +112,7 @@
                 class="flex-grow-1"
                 hide-details
               />
-              <v-tooltip location="top" :text="t('import.ocr_tip')">
+              <v-tooltip v-if="importFormat === 'image'" location="top" :text="t('import.ocr_tip')">
                 <template #activator="{ props: tipProps }">
                   <v-btn
                     v-bind="tipProps"
@@ -166,6 +210,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { api, type SongDto } from "@/lib/tauri";
 import { t } from "@/i18n";
 import { useLibraryStore } from "@/stores/library";
+import { useSettingsStore } from "@/stores/settings";
 import { useToastStore, errText } from "@/stores/toast";
 import { recognizeText } from "@/lib/ocr";
 
@@ -175,6 +220,8 @@ const props = defineProps<{
   presetPaths?: string[];
   /** 截图裁剪后的 dataURL（作为第一页，可与粘贴/文件混用） */
   imageData?: string | null;
+  /** 预选曲谱类型（拖拽 .gp 文件时传入 'gp'） */
+  presetFormat?: "image" | "gp";
 }>();
 const emit = defineEmits<{
   (e: "update:modelValue", v: boolean): void;
@@ -183,6 +230,7 @@ const emit = defineEmits<{
 
 const library = useLibraryStore();
 const toast = useToastStore();
+const settingsStore = useSettingsStore();
 
 const TUNINGS = ["Standard", "Drop D", "Open G", "Open D", "DADGAD", "Half Step Down"];
 
@@ -190,6 +238,30 @@ const visible = computed({
   get: () => props.modelValue,
   set: (v: boolean) => emit("update:modelValue", v),
 });
+
+// ---------------------------------------------------------------------------
+// 曲谱类型与 GP 单文件
+// ---------------------------------------------------------------------------
+
+const importFormat = ref<"image" | "gp">("image");
+const gpPath = ref("");
+const gpFileName = computed(() => (gpPath.value ? gpPath.value.split(/[\\/]/).pop() ?? gpPath.value : ""));
+
+watch(importFormat, () => {
+  errorHint.value = "";
+});
+
+async function pickGpFile() {
+  const picked = await open({
+    multiple: false,
+    filters: [{ name: "Guitar Pro", extensions: ["gp3", "gp4", "gp5", "gpx", "gp"] }],
+  });
+  if (!picked || typeof picked !== "string") return;
+  gpPath.value = picked;
+  if (!meta.value.title.trim()) {
+    meta.value.title = gpFileName.value.replace(/\.(gp3|gp4|gp5|gpx|gp)$/i, "");
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 页面列表（文件路径 + 内存图片 dataURL 统一管理）
@@ -215,28 +287,51 @@ watch(
   () => props.modelValue,
   (v) => {
     if (!v) return;
-    pages.value = (props.presetPaths ?? []).map((p) => ({
-      key: `path-${p}`,
-      kind: "path" as const,
-      value: p,
-      name: p.split(/[\\/]/).pop() ?? p,
-      ext: "",
-    }));
-    if (props.imageData) {
-      pages.value.unshift({
-        key: `data-shot`,
-        kind: "data",
-        value: props.imageData,
-        name: t("screenshot.title"),
-        ext: dataUrlExt(props.imageData),
-      });
+    // 决定本次导入类型：显式 presetFormat 优先，其次按预选文件扩展名推断，最后记忆上次类型
+    let fmt: "image" | "gp" = props.presetFormat ?? (settingsStore.settings.gp_player.last_import_format === "gp" ? "gp" : "image");
+    const preset = props.presetPaths ?? [];
+    if (!props.presetFormat && preset.length && preset.every((p) => /\.(gp3|gp4|gp5|gpx|gp)$/i.test(p))) {
+      fmt = "gp";
     }
-    meta.value = { title: "", artist: "", album: "", tuning: "Standard", bpm: null, tags: "" };
+    if (props.imageData) fmt = "image";
+    importFormat.value = fmt;
+
+    if (fmt === "gp") {
+      gpPath.value = preset[0] ?? "";
+      pages.value = [];
+    } else {
+      gpPath.value = "";
+      pages.value = preset.map((p) => ({
+        key: `path-${p}`,
+        kind: "path" as const,
+        value: p,
+        name: p.split(/[\\/]/).pop() ?? p,
+        ext: "",
+      }));
+      if (props.imageData) {
+        pages.value.unshift({
+          key: `data-shot`,
+          kind: "data",
+          value: props.imageData,
+          name: t("screenshot.title"),
+          ext: dataUrlExt(props.imageData),
+        });
+      }
+    }
+
+    meta.value = {
+      title: fmt === "gp" && gpPath.value ? gpFileName.value.replace(/\.(gp3|gp4|gp5|gpx|gp)$/i, "") : "",
+      artist: "",
+      album: "",
+      tuning: "Standard",
+      bpm: null,
+      tags: "",
+    };
     collectionNames.value = [];
     errorHint.value = "";
     resetOcr();
     // 有图且歌名为空时自动尝试 OCR
-    if (pages.value.length) void runOcr(true);
+    if (fmt === "image" && pages.value.length) void runOcr(true);
   },
 );
 
@@ -290,7 +385,7 @@ async function pickFiles() {
 // ---------------------------------------------------------------------------
 
 async function onPaste(e: ClipboardEvent) {
-  if (!visible.value) return;
+  if (!visible.value || importFormat.value !== "image") return;
   const items = Array.from(e.clipboardData?.items ?? []);
   const imageItems = items.filter((it) => it.type.startsWith("image/"));
   if (!imageItems.length) return;
@@ -423,7 +518,12 @@ async function save() {
     errorHint.value = t("import.need_title");
     return;
   }
-  if (!pages.value.length) {
+  const isGp = importFormat.value === "gp";
+  if (isGp && !gpPath.value) {
+    errorHint.value = t("import.need_gp");
+    return;
+  }
+  if (!isGp && !pages.value.length) {
     errorHint.value = t("import.need_image");
     return;
   }
@@ -438,11 +538,17 @@ async function save() {
       bpm: meta.value.bpm && meta.value.bpm > 0 ? Math.round(meta.value.bpm) : null,
       tags: meta.value.tags.trim(),
     };
-    const pathItems = pages.value.filter((p) => p.kind === "path").map((p) => p.value);
-    const extraImages = pages.value
-      .filter((p) => p.kind === "data")
-      .map((p) => ({ data: p.value, ext: p.ext }));
-    const song = await api.importSongs(pathItems, extraImages, metaInput, ids);
+    const song = isGp
+      ? await api.importGpSong(gpPath.value, metaInput, ids)
+      : await api.importSongs(
+          pages.value.filter((p) => p.kind === "path").map((p) => p.value),
+          pages.value.filter((p) => p.kind === "data").map((p) => ({ data: p.value, ext: p.ext })),
+          metaInput,
+          ids,
+        );
+    // 记住本次导入类型，下次打开默认沿用
+    settingsStore.settings.gp_player.last_import_format = importFormat.value;
+    settingsStore.save();
     toast.success(t("library.imported"));
     emit("imported", song);
     close();
@@ -489,5 +595,13 @@ function close() {
 }
 .empty-pages {
   height: 220px;
+}
+.gp-file-box {
+  border: 2px solid var(--st-border);
+  min-height: 88px;
+  background: rgba(13, 13, 13, 0.5);
+}
+.min-width-0 {
+  min-width: 0;
 }
 </style>

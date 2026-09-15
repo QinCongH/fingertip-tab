@@ -2,6 +2,14 @@
   <div class="st-card" @click="emit('open')">
     <!-- 封面 -->
     <div class="thumb-wrap">
+      <template v-if="isGp">
+        <div class="thumb-gp d-flex flex-column align-center justify-center ga-2">
+          <v-icon icon="mdi-music-note-sixteenth" size="44" style="opacity: 0.55" />
+          <span class="st-mono gp-ext">.{{ song.fileType }}</span>
+        </div>
+        <div class="pages-badge st-chip-coral">GP</div>
+      </template>
+      <template v-else>
       <img
         v-if="coverSrc"
         :src="coverSrc"
@@ -12,6 +20,7 @@
       />
       <div v-else class="thumb-fallback st-display">♪</div>
       <div class="pages-badge st-chip-coral">{{ t("library.pages_count", { n: song.pages.length }) }}</div>
+      </template>
       <div class="hover-open">
         <v-btn color="primary" prepend-icon="mdi-book-open-variant" variant="flat">
           {{ t("library.open") }}
@@ -70,9 +79,10 @@ const emit = defineEmits<{ (e: "open"): void; (e: "edit"): void; (e: "delete"): 
 
 const library = useLibraryStore();
 const imgFailed = ref(false);
+const isGp = computed(() => props.song.format === "gp");
 
 const coverSrc = computed(() => {
-  if (imgFailed.value) return null;
+  if (imgFailed.value || isGp.value) return null;
   const cover = props.song.pages[0];
   if (!cover) return null;
   return library.thumbSrc(cover.uuid);
@@ -106,6 +116,16 @@ const tagList = computed(() =>
   font-size: 48px;
   color: #1a1a1a;
   opacity: 0.25;
+}
+.thumb-gp {
+  width: 100%;
+  height: 100%;
+  color: #1a1a1a;
+}
+.gp-ext {
+  font-size: 13px;
+  opacity: 0.4;
+  letter-spacing: 1px;
 }
 .pages-badge {
   position: absolute;

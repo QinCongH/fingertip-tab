@@ -137,6 +137,39 @@ impl Default for ShortcutSettings {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GpPlayerSettings {
+    /// 谱面缩放 0.5–2.0
+    pub zoom: f64,
+    /// 是否显示五线谱
+    pub show_standard_notation: bool,
+    /// 是否显示和弦名
+    pub show_chord_names: bool,
+    /// 预备拍拍数：0 关闭 / 1 / 2 / 4
+    pub count_in_beats: i64,
+    /// 默认滚动模式：continuous | off_screen | smooth | off
+    pub scroll_mode: String,
+    /// 节拍器音量 0–100
+    pub metronome_volume: i64,
+    /// 上次导入选择的曲谱类型：image | gp
+    pub last_import_format: String,
+}
+
+impl Default for GpPlayerSettings {
+    fn default() -> Self {
+        Self {
+            zoom: 1.0,
+            show_standard_notation: true,
+            show_chord_names: true,
+            count_in_beats: 0,
+            scroll_mode: "smooth".to_string(),
+            metronome_volume: 60,
+            last_import_format: "image".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AppSettings {
@@ -144,6 +177,7 @@ pub struct AppSettings {
     pub appearance: AppearanceSettings,
     pub ai_control: AiControlSettings,
     pub shortcuts: ShortcutSettings,
+    pub gp_player: GpPlayerSettings,
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +209,7 @@ pub async fn ensure_library_ready(app: &AppHandle) -> Result<SqlitePool> {
     let lib = get_library_path(app).await?;
     file::ensure_dir(&lib.join("Resources/Images")).await?;
     file::ensure_dir(&lib.join("Resources/Thumbnails")).await?;
+    file::ensure_dir(&lib.join("Resources/GPFiles")).await?;
     file::ensure_dir(&lib.join("Backups")).await?;
 
     let settings_path = lib.join("settings.json");
@@ -224,12 +259,16 @@ pub async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<()> 
     settings.general.library_path = lib.to_string_lossy().into_owned();
     save_settings_file(&lib.join("settings.json"), &settings).await?;
 
-    // 同步开机自启状态
+    // 同步开机自启状态；dev 模式下注册表项可能不存在，失败仅告警不阻断
     let auto = app.autolaunch();
     if settings.general.auto_start {
-        auto.enable().map_err(|e| AppError::msg(format!("设置开机自启失败: {e}")))?;
+        if let Err(e) = auto.enable() {
+            log::warn!("设置开机自启失败: {e}");
+        }
     } else {
-        auto.disable().map_err(|e| AppError::msg(format!("关闭开机自启失败: {e}")))?;
+        if let Err(e) = auto.disable() {
+            log::warn!("关闭开机自启失败: {e}");
+        }
     }
     Ok(())
 }

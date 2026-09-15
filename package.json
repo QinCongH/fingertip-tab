@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@coderline/alphatab": "^1.8.4",
     "@mdi/font": "^7.4.47",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.3",
@@ -22,6 +23,7 @@
     "vuetify": "^4.2.1"
   },
   "devDependencies": {
+    "@coderline/alphatab-vite": "^1.8.4",
     "@tauri-apps/cli": "^2",
     "@types/node": "^26.5.1",
     "@vitejs/plugin-vue": "^6.0.7",

@@ -74,6 +74,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::import_songs,
+            commands::import_gp_song,
+            commands::read_gp_file,
+            commands::update_player_state,
             commands::read_image_base64,
             commands::get_songs,
             commands::get_song,
