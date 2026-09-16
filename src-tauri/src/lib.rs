@@ -27,7 +27,9 @@ pub fn run() {
                 commands::settings::ensure_library_ready(&handle).await
             })
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-            app.manage(AppState { pool });
+            app.manage(AppState { pool: pool.clone() });
+            let share_handle = app.handle().clone();
+            commands::share::register_context(pool, share_handle);
 
             // 启动时恢复窗口状态
             let handle = app.handle().clone();
@@ -98,6 +100,10 @@ pub fn run() {
             commands::save_app_config,
             commands::apply_window_state,
             commands::restart_app,
+            commands::start_share,
+            commands::start_library_share,
+            commands::get_share_info,
+            commands::stop_share,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

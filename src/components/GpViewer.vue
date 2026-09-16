@@ -23,7 +23,39 @@
     <!-- 谱面与控制条始终渲染（loading 时由遮罩盖住），保证 atEl 始终存在 -->
     <!-- 谱面区 -->
     <div ref="scrollEl" class="gp-surface">
-      <div ref="atEl" class="gp-alphatab"></div>
+      <div
+        class="gp-canvas-wrap"
+        :style="{
+          width: sheetWidth === 0 ? '100%' : `${sheetWidth}px`,
+        }"
+      >
+        <div ref="atEl" class="gp-alphatab"></div>
+      </div>
+
+      <!-- 屏幕两侧常驻拖拽手柄（直接挂在 gp-root 视口层） -->
+      <div
+        class="gp-screen-handle gp-screen-handle--left"
+        :class="{ 'gp-screen-handle--active': isResizing }"
+        :title="t('gp.width_drag_hint')"
+        @mousedown.prevent="startDragResize($event, 'left')"
+        @dblclick="resetSheetWidth"
+      >
+        <div class="gp-screen-handle-bar">
+          <v-icon icon="mdi-drag-vertical" size="18" />
+        </div>
+      </div>
+
+      <div
+        class="gp-screen-handle gp-screen-handle--right"
+        :class="{ 'gp-screen-handle--active': isResizing }"
+        :title="t('gp.width_drag_hint')"
+        @mousedown.prevent="startDragResize($event, 'right')"
+        @dblclick="resetSheetWidth"
+      >
+        <div class="gp-screen-handle-bar">
+          <v-icon icon="mdi-drag-vertical" size="18" />
+        </div>
+      </div>
     </div>
 
       <!-- 播放位置高亮条（进度条上的循环区段通过 slider track 无法表达，用 overlay） -->
@@ -212,6 +244,24 @@
                   @update:model-value="applyChords"
                 />
               </div>
+              <div class="d-flex align-center ga-3 mb-2">
+                <span class="text-body-2 flex-shrink-0">{{ t("gp.sheet_width") }}</span>
+                <v-slider
+                  :model-value="sheetWidth === 0 ? 2000 : sheetWidth"
+                  :min="600" :max="2000" :step="20"
+                  hide-details density="compact"
+                  @update:model-value="applyWidthSlider"
+                />
+                <v-btn
+                  size="x-small"
+                  :variant="sheetWidth === 0 ? 'flat' : 'outlined'"
+                  :color="sheetWidth === 0 ? 'primary' : undefined"
+                  class="flex-shrink-0"
+                  @click="resetSheetWidth"
+                >
+                  {{ t("gp.width_auto") }}
+                </v-btn>
+              </div>
               <div class="d-flex align-center ga-3 mb-1">
                 <span class="text-body-2 flex-shrink-0">{{ t("gp.zoom") }}</span>
                 <v-slider
@@ -354,6 +404,8 @@ const showScore = ref(true);
 const showTab = ref(true);
 const showChords = ref(true);
 const zoom = ref(1);
+const sheetWidth = ref<number>(0); // 0 = 100% 铺满全屏，>0 为固定像素宽度
+const isResizing = ref(false);
 const countInBeats = ref(0);
 const countInOptions = computed(() => [
   { title: t("gp.countin_off"), value: 0 },
@@ -384,6 +436,7 @@ interface PersistedState {
   loop?: { enabled: boolean; start: number; end: number };
   tracks?: { index: number; mute: boolean; solo: boolean; volume: number; pan: number }[];
   scrollMode?: string;
+  sheetWidth?: number;
 }
 
 function persisted(): PersistedState {
@@ -461,6 +514,7 @@ function initAlphaTab(data: Uint8Array) {
   const gp = settings.settings.gp_player;
   const saved = persisted();
   speed.value = clamp(saved.speed ?? 1, 0.25, 2);
+  sheetWidth.value = saved.sheetWidth ?? 0;
   showScore.value = gp.show_standard_notation;
   showTab.value = true;
   showChords.value = gp.show_chord_names;
@@ -768,6 +822,57 @@ function applyZoom() {
   persistSheetPrefs();
 }
 
+function applyWidthSlider(v: number) {
+  if (v >= 1990) {
+    sheetWidth.value = 0;
+  } else {
+    sheetWidth.value = Math.round(v);
+  }
+  persistState();
+}
+
+function resetSheetWidth() {
+  sheetWidth.value = 0;
+  persistState();
+}
+
+// ---------------------------------------------------------------------------
+// 边缘拖拽调整谱面宽度
+// ---------------------------------------------------------------------------
+
+function startDragResize(e: MouseEvent, side: "left" | "right") {
+  isResizing.value = true;
+  document.body.style.cursor = "ew-resize";
+  document.body.style.userSelect = "none";
+
+  const startX = e.clientX;
+  const initialWidth = atEl.value?.clientWidth || 900;
+  const maxW = (scrollEl.value?.clientWidth || window.innerWidth) - 20;
+
+  const onMouseMove = (ev: MouseEvent) => {
+    // 从左侧往右拖或从右侧往左拖缩短宽度，往外侧拖扩大宽度
+    const delta = (ev.clientX - startX) * (side === "right" ? 2 : -2);
+    const newWidth = Math.min(maxW, Math.max(500, Math.round(initialWidth + delta)));
+    if (newWidth >= maxW - 60) {
+      sheetWidth.value = 0; // 贴近边界时吸附为铺满
+    } else {
+      sheetWidth.value = newWidth;
+    }
+  };
+
+  const onMouseUp = () => {
+    isResizing.value = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+    persistState();
+  };
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+}
+
 function persistSheetPrefs() {
   const gp = { ...settings.settings.gp_player };
   gp.show_standard_notation = showScore.value;
@@ -824,6 +929,7 @@ function persistState() {
         pan: x.pan,
       })),
       scrollMode: settings.settings.gp_player.scroll_mode,
+      sheetWidth: sheetWidth.value,
     };
     void api.updatePlayerState(props.song.id, JSON.stringify(state)).catch(() => undefined);
   }, 300);
@@ -862,8 +968,62 @@ onBeforeUnmount(() => {
   background: var(--st-light);
   /* 给底部悬浮控制条留出滚动余量，避免最后一行被遮住 */
   padding-bottom: 72px;
+  display: flex;
+  justify-content: center;
+}
+.gp-canvas-wrap {
+  position: relative;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: 0 20px;
+}
+/* 屏幕左右两侧边缘手柄：默认完全透明隐藏，仅当鼠标悬浮靠近边缘热区或正在拖拽时才显示 */
+.gp-screen-handle {
+  position: fixed;
+  top: 100px;
+  bottom: 100px;
+  width: 32px;
+  z-index: 100;
+  cursor: ew-resize;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.gp-screen-handle:hover,
+.gp-screen-handle--active {
+  opacity: 1;
+}
+.gp-screen-handle--left {
+  left: 0;
+}
+.gp-screen-handle--right {
+  right: 0;
+}
+.gp-screen-handle-bar {
+  width: 14px;
+  height: 56px;
+  background: rgba(30, 30, 30, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 7px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: background 0.2s ease, transform 0.15s ease, width 0.15s ease, border-color 0.2s ease;
+}
+.gp-screen-handle:hover .gp-screen-handle-bar,
+.gp-screen-handle--active .gp-screen-handle-bar {
+  background: #ff6b6b;
+  border-color: #ff6b6b;
+  width: 18px;
+  transform: scale(1.12);
 }
 .gp-alphatab {
+  width: 100%;
   min-height: 100%;
 }
 .gp-bottom {
@@ -948,11 +1108,14 @@ onBeforeUnmount(() => {
 
 <style>
 /* AlphaTab 运行时创建的光标 DOM 没有 data-v 属性，样式必须放在非 scoped 块 */
-.gp-alphatab.at-surface .at-cursor-bar {
-  background: rgba(255, 107, 107, 0.14) !important;
+.gp-alphatab .at-cursor-bar,
+.at-cursor-bar {
+  background: rgba(255, 107, 107, 0.22) !important;
   border-radius: 0;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.2);
 }
-.gp-alphatab.at-surface .at-cursor-beat {
+.gp-alphatab .at-cursor-beat,
+.at-cursor-beat {
   background: #ff6b6b !important;
   /* 贯穿谱面的长竖线：alphaTab 内联设置的 height 用 !important 覆盖为超长值 */
   width: 5px !important;
@@ -960,7 +1123,8 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 6px rgba(255, 107, 107, 0.6);
   z-index: 3;
 }
-.gp-alphatab .at-highlight {
+.gp-alphatab .at-highlight,
+.at-highlight {
   fill: #ff6b6b;
 }
 </style>

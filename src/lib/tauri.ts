@@ -172,7 +172,25 @@ export const api = {
   getAppConfig: () => invoke<AppConfig>("get_app_config"),
   saveAppConfig: (config: AppConfig) => invoke<void>("save_app_config", { config }),
   restartApp: () => invoke<void>("restart_app"),
+
+  // 局域网共享
+  startShare: (songId: number) =>
+    invoke<ShareInfo>("start_share", { songId }),
+  startLibraryShare: () =>
+    invoke<ShareInfo>("start_library_share"),
+  getShareInfo: () =>
+    invoke<ShareInfo | null>("get_share_info"),
+  stopShare: () => invoke<void>("stop_share"),
 };
+
+export interface ShareInfo {
+  url: string;
+  ip: string;
+  port: number;
+  token: string;
+  isLibrary?: boolean;
+  songId?: number | null;
+}
 
 // ---------------------------------------------------------------------------
 // 资源 URL（asset protocol）

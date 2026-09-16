@@ -29,6 +29,14 @@
           <v-btn color="primary" variant="flat" prepend-icon="mdi-plus" @click="openImport([])">
             {{ t("library.import") }}
           </v-btn>
+          <!-- 局域网共享 -->
+          <v-btn
+            icon="mdi-qrcode"
+            :variant="shareActive ? 'flat' : 'text'"
+            :color="shareActive ? 'primary' : undefined"
+            :title="t('share.title')"
+            @click="onShareBtnClick"
+          />
           <v-btn icon="mdi-cog-outline" variant="text" @click="router.push('/settings')" />
         </div>
         <div class="ml-1 flex-shrink-0">
@@ -99,6 +107,41 @@
       danger
       @confirm="doDelete"
     />
+
+    <!-- 局域网共享弹窗 -->
+    <v-dialog v-model="shareOpen" max-width="380">
+      <div class="share-dialog">
+        <div class="d-flex align-center mb-3">
+          <span class="text-body-1 font-weight-black">{{ t("share.title") }}</span>
+          <v-spacer />
+          <v-btn icon="mdi-close" variant="text" size="small" @click="shareOpen = false" />
+        </div>
+        <template v-if="shareInfo">
+          <div class="share-qr-wrap">
+            <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR" class="share-qr" />
+            <div v-else class="share-qr-empty">{{ t("share.generating") }}</div>
+          </div>
+          <div class="st-mono text-caption mt-3 text-center" style="word-break: break-all; opacity: 0.7">
+            {{ shareInfo.url }}
+          </div>
+          <div class="text-caption mt-3 text-center" style="opacity: 0.6">
+            {{ t("share.hint") }}
+          </div>
+          <div class="d-flex justify-center ga-2 mt-4">
+            <v-btn variant="tonal" size="small" @click="copyShareUrl">
+              {{ t("share.copy") }}
+            </v-btn>
+            <v-btn color="primary" variant="flat" size="small" @click="closeShare">
+              {{ t("share.stop") }}
+            </v-btn>
+          </div>
+        </template>
+        <div v-else class="text-center py-6">
+          <v-progress-circular indeterminate color="primary" size="36" />
+          <div class="text-caption mt-3" style="opacity: 0.6">{{ t("share.starting") }}</div>
+        </div>
+      </div>
+    </v-dialog>
   </div>
 </template>
 
@@ -106,7 +149,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { SongDto } from "@/lib/tauri";
+import QRCode from "qrcode";
+import type { SongDto, ShareInfo } from "@/lib/tauri";
 import { api } from "@/lib/tauri";
 import { t } from "@/i18n";
 import { useLibraryStore } from "@/stores/library";
@@ -234,6 +278,87 @@ onMounted(() => {
 onUnmounted(() => {
   unlisten?.();
 });
+
+// ------- 局域网整库共享 -------
+
+const shareOpen = ref(false);
+const shareActive = ref(false);
+const shareInfo = ref<ShareInfo | null>(null);
+const qrDataUrl = ref("");
+
+async function checkCurrentShare() {
+  try {
+    const info = await api.getShareInfo();
+    if (info) {
+      shareActive.value = true;
+      shareInfo.value = info;
+      qrDataUrl.value = await QRCode.toDataURL(info.url, {
+        width: 240,
+        margin: 1,
+        color: { dark: "#1A1A1A", light: "#F5F5F0" },
+      });
+    } else {
+      shareActive.value = false;
+      shareInfo.value = null;
+      qrDataUrl.value = "";
+    }
+  } catch {
+    // 忽略检查失败
+  }
+}
+
+async function onShareBtnClick() {
+  // 点击二维码按钮打开弹窗并确保共享开启
+  shareOpen.value = true;
+  if (!shareActive.value || !shareInfo.value) {
+    await startLibrarySharing();
+  }
+}
+
+async function startLibrarySharing() {
+  shareInfo.value = null;
+  qrDataUrl.value = "";
+  try {
+    const info = await api.startLibraryShare();
+    shareInfo.value = info;
+    shareActive.value = true;
+    qrDataUrl.value = await QRCode.toDataURL(info.url, {
+      width: 240,
+      margin: 1,
+      color: { dark: "#1A1A1A", light: "#F5F5F0" },
+    });
+  } catch (e) {
+    toast.error(t("share.failed", { msg: errText(e) }));
+    shareActive.value = false;
+    shareOpen.value = false;
+  }
+}
+
+async function closeShare() {
+  shareOpen.value = false;
+  shareActive.value = false;
+  shareInfo.value = null;
+  qrDataUrl.value = "";
+  try {
+    await api.stopShare();
+  } catch {
+    // 忽略停止失败
+  }
+}
+
+async function copyShareUrl() {
+  if (!shareInfo.value) return;
+  try {
+    await navigator.clipboard.writeText(shareInfo.value.url);
+    toast.success(t("share.copied"));
+  } catch {
+    // 忽略复制失败
+  }
+}
+
+onMounted(() => {
+  void checkCurrentShare();
+});
 </script>
 
 <style scoped>
@@ -252,5 +377,29 @@ onUnmounted(() => {
 }
 .empty-state {
   height: 60vh;
+}
+.share-dialog {
+  background: #1A1A1A;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  padding: 16px 20px 20px;
+}
+.share-qr-wrap {
+  display: flex;
+  justify-content: center;
+}
+.share-qr {
+  width: 240px;
+  height: 240px;
+  display: block;
+}
+.share-qr-empty {
+  width: 240px;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #333333;
+  font-size: 12px;
+  opacity: 0.7;
 }
 </style>

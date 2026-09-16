@@ -97,6 +97,15 @@
             class="ml-1"
             @click="toggleAI"
           />
+          <!-- 局域网共享 -->
+          <v-btn
+            icon="mdi-qrcode"
+            :variant="sharing ? 'flat' : 'text'"
+            :color="sharing ? 'primary' : undefined"
+            :title="t('share.title')"
+            class="ml-1"
+            @click="shareOpen = !shareOpen"
+          />
           <v-btn
             :icon="fullscreen ? 'mdi-fullscreen-exit' : 'mdi-fullscreen'"
             variant="text"
@@ -111,6 +120,41 @@
       </div>
     </div>
 
+    <!-- 局域网共享弹窗 -->
+    <v-dialog v-model="shareOpen" max-width="380">
+      <div class="share-dialog">
+        <div class="d-flex align-center mb-3">
+          <span class="text-body-1 font-weight-black">{{ t("share.title") }}</span>
+          <v-spacer />
+          <v-btn icon="mdi-close" variant="text" size="small" @click="closeShare" />
+        </div>
+        <template v-if="shareInfo">
+          <div class="share-qr-wrap">
+            <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR" class="share-qr" />
+            <div v-else class="share-qr-empty">{{ t("share.generating") }}</div>
+          </div>
+          <div class="st-mono text-caption mt-3 text-center" style="word-break: break-all; opacity: 0.7">
+            {{ shareInfo.url }}
+          </div>
+          <div class="text-caption mt-3 text-center" style="opacity: 0.6">
+            {{ t("share.hint") }}
+          </div>
+          <div class="d-flex justify-center ga-2 mt-4">
+            <v-btn variant="tonal" size="small" @click="copyShareUrl">
+              {{ t("share.copy") }}
+            </v-btn>
+            <v-btn color="primary" variant="flat" size="small" @click="closeShare">
+              {{ t("share.stop") }}
+            </v-btn>
+          </div>
+        </template>
+        <div v-else class="text-center py-6">
+          <v-progress-circular indeterminate color="primary" size="36" />
+          <div class="text-caption mt-3" style="opacity: 0.6">{{ t("share.starting") }}</div>
+        </div>
+      </div>
+    </v-dialog>
+
     <!-- 内容区 -->
     <div
       v-if="song"
@@ -122,9 +166,16 @@
 
       <template v-else>
       <!-- 模式 1：固定翻页 -->
-      <div v-if="mode === 'fixed'" class="mode-fixed" @click="onFixedClick">
+      <div
+        v-if="mode === 'fixed'"
+        ref="fixedContainerEl"
+        class="mode-fixed"
+        @click="onFixedClick"
+        @wheel="onFixedWheel"
+      >
         <Transition name="page-flip" mode="out-in">
           <img
+            ref="fixedImgEl"
             :key="currentUuid"
             :src="currentSrc"
             class="page-img"
@@ -134,6 +185,31 @@
         </Transition>
         <div class="click-zone" style="left: 0; width: 38%"></div>
         <div class="click-zone" style="right: 0; width: 38%"></div>
+
+        <!-- 屏幕左右两侧悬浮拖拽拉伸手柄（hover 时显示，支持双击恢复自适应） -->
+        <div
+          class="fixed-screen-handle fixed-screen-handle--left"
+          :class="{ 'fixed-screen-handle--active': isResizingFixed }"
+          :title="t('viewer.width_drag_hint')"
+          @mousedown.stop.prevent="startFixedDragResize($event, 'left')"
+          @dblclick.stop.prevent="resetFixedSheetWidth"
+        >
+          <div class="fixed-screen-handle-bar">
+            <v-icon icon="mdi-drag-vertical" size="18" />
+          </div>
+        </div>
+
+        <div
+          class="fixed-screen-handle fixed-screen-handle--right"
+          :class="{ 'fixed-screen-handle--active': isResizingFixed }"
+          :title="t('viewer.width_drag_hint')"
+          @mousedown.stop.prevent="startFixedDragResize($event, 'right')"
+          @dblclick.stop.prevent="resetFixedSheetWidth"
+        >
+          <div class="fixed-screen-handle-bar">
+            <v-icon icon="mdi-drag-vertical" size="18" />
+          </div>
+        </div>
       </div>
 
       <!-- 模式 2：垂直滚动 -->
@@ -281,6 +357,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import QRCode from "qrcode";
 import { useRoute, useRouter } from "vue-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, type PageDto, type SongDto } from "@/lib/tauri";
@@ -313,10 +390,73 @@ const song = ref<SongDto | null>(null);
 const loaded = ref(false);
 const isGp = computed(() => song.value?.format === "gp");
 
+// ---------------------------------------------------------------------------
+// 局域网共享（手机扫码查看）
+// ---------------------------------------------------------------------------
+
+const shareOpen = ref(false);
+const sharing = ref(false);
+const shareInfo = ref<{ url: string } | null>(null);
+const qrDataUrl = ref("");
+
+async function openShare() {
+  if (!song.value || shareInfo.value) return;
+  sharing.value = true;
+  shareInfo.value = null;
+  qrDataUrl.value = "";
+  try {
+    const info = await api.startShare(song.value.id);
+    shareInfo.value = info;
+    qrDataUrl.value = await QRCode.toDataURL(info.url, {
+      width: 240,
+      margin: 1,
+      color: { dark: "#1A1A1A", light: "#F5F5F0" },
+    });
+  } catch (e) {
+    toast.push(t("share.failed", { msg: errText(e) }), "error");
+    shareOpen.value = false;
+  } finally {
+    sharing.value = false;
+  }
+}
+
+async function closeShare() {
+  shareOpen.value = false;
+  if (shareInfo.value) {
+    shareInfo.value = null;
+    qrDataUrl.value = "";
+    try {
+      await api.stopShare();
+    } catch {
+      // 忽略停止失败
+    }
+  }
+}
+
+async function copyShareUrl() {
+  if (!shareInfo.value) return;
+  try {
+    await navigator.clipboard.writeText(shareInfo.value.url);
+    toast.push(t("share.copied"), "success");
+  } catch {
+    // 忽略复制失败
+  }
+}
+
+watch(shareOpen, (open) => {
+  if (open) void openShare();
+  else if (shareInfo.value) void closeShare();
+});
+
+
 const mode = ref<"fixed" | "scroll" | "dual_horizontal">(
   (settings.settings.appearance.default_view_mode as "fixed" | "scroll" | "dual_horizontal") || "fixed",
 );
 const zoomMode = ref(settings.settings.appearance.zoom_mode || "fit_height");
+const fixedSheetWidth = ref<number>(0); // 0 为按 zoomMode 自适应；>0 为手动拖拽设定的像素宽度
+const isResizingFixed = ref(false);
+const fixedContainerEl = ref<HTMLElement | null>(null);
+const fixedImgEl = ref<HTMLImageElement | null>(null);
 const pageIndex = ref(0);
 const scrollPageIndex = ref(0);
 
@@ -395,6 +535,14 @@ const contentBoxStyle = computed(() => ({
 }));
 
 const zoomStyle = computed(() => {
+  if (fixedSheetWidth.value > 0) {
+    return {
+      width: `${fixedSheetWidth.value}px`,
+      maxWidth: "100%",
+      height: "auto",
+      maxHeight: "none",
+    };
+  }
   switch (zoomMode.value) {
     case "fit_height":
       return { height: contentHeight.value, width: "auto", maxWidth: "none", objectFit: "contain" as const };
@@ -461,6 +609,11 @@ onUnmounted(() => {
   pauseScroll();
   window.removeEventListener("keydown", onKeydown);
   if (fullscreen.value) void appWindow.setFullscreen(false);
+  // 离开看谱页时停止局域网共享
+  if (shareInfo.value) {
+    shareInfo.value = null;
+    void api.stopShare().catch(() => undefined);
+  }
   // 离开看谱页时清除"最后打开"记录
   void api
     .getAppConfig()
@@ -479,8 +632,64 @@ function flip(dir: 1 | -1) {
 }
 
 function onFixedClick(e: MouseEvent) {
+  if (isResizingFixed.value) return;
   const half = window.innerWidth / 2;
   flip(e.clientX < half ? -1 : 1);
+}
+
+// ---------------------------------------------------------------------------
+// 翻页模式边缘拖拽拉伸 & 滚轮交互
+// ---------------------------------------------------------------------------
+
+function startFixedDragResize(e: MouseEvent, side: "left" | "right") {
+  isResizingFixed.value = true;
+  document.body.style.cursor = "ew-resize";
+  document.body.style.userSelect = "none";
+
+  const startX = e.clientX;
+  const initialWidth = fixedImgEl.value?.clientWidth || fixedContainerEl.value?.clientWidth || 900;
+  const maxW = (fixedContainerEl.value?.clientWidth || window.innerWidth) - 20;
+
+  const onMouseMove = (ev: MouseEvent) => {
+    const delta = (ev.clientX - startX) * (side === "right" ? 2 : -2);
+    const newWidth = Math.min(maxW, Math.max(400, Math.round(initialWidth + delta)));
+    if (newWidth >= maxW - 40) {
+      fixedSheetWidth.value = 0; // 贴近视口边界时吸附恢复铺满/自适应
+    } else {
+      fixedSheetWidth.value = newWidth;
+    }
+  };
+
+  const onMouseUp = () => {
+    setTimeout(() => {
+      isResizingFixed.value = false;
+    }, 50);
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  };
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+}
+
+function resetFixedSheetWidth() {
+  fixedSheetWidth.value = 0;
+}
+
+function onFixedWheel(e: WheelEvent) {
+  if (e.ctrlKey) {
+    // 按住 Ctrl 时滚轮缩放谱面宽度
+    e.preventDefault();
+    const currentW = fixedSheetWidth.value || fixedImgEl.value?.clientWidth || 900;
+    const step = e.deltaY < 0 ? 40 : -40;
+    const maxW = (fixedContainerEl.value?.clientWidth || window.innerWidth) - 20;
+    const nextW = Math.min(maxW, Math.max(400, currentW + step));
+    fixedSheetWidth.value = nextW;
+    return;
+  }
+  // 未按住 Ctrl 时：如果图片内容产生了垂直或水平滚动条，允许原生滚动查看谱面细节
 }
 
 const scrollEl = ref<HTMLElement | null>(null);
@@ -760,6 +969,51 @@ function goBack() {
 .mode-fixed .page-img {
   display: block;
 }
+/* 图片翻页模式边缘拖拽手柄：默认完全透明隐藏，仅当鼠标悬浮靠近边缘热区或正在拖拽时显示 */
+.fixed-screen-handle {
+  position: fixed;
+  top: 100px;
+  bottom: 100px;
+  width: 32px;
+  z-index: 100;
+  cursor: ew-resize;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.fixed-screen-handle:hover,
+.fixed-screen-handle--active {
+  opacity: 1;
+}
+.fixed-screen-handle--left {
+  left: 0;
+}
+.fixed-screen-handle--right {
+  right: 0;
+}
+.fixed-screen-handle-bar {
+  width: 14px;
+  height: 56px;
+  background: rgba(30, 30, 30, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 7px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: background 0.2s ease, transform 0.15s ease, width 0.15s ease, border-color 0.2s ease;
+}
+.fixed-screen-handle:hover .fixed-screen-handle-bar,
+.fixed-screen-handle--active .fixed-screen-handle-bar {
+  background: #ff6b6b;
+  border-color: #ff6b6b;
+  width: 18px;
+  transform: scale(1.12);
+}
 .click-zone {
   position: fixed;
   top: var(--top-bar-h, 56px);
@@ -854,6 +1108,30 @@ function goBack() {
   background: #1A1A1A;
   border: 2px solid rgba(255, 255, 255, 0.2);
   min-width: 180px;
+}
+.share-dialog {
+  background: #1A1A1A;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  padding: 16px 20px 20px;
+}
+.share-qr-wrap {
+  display: flex;
+  justify-content: center;
+}
+.share-qr {
+  width: 240px;
+  height: 240px;
+  display: block;
+}
+.share-qr-empty {
+  width: 240px;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #333333;
+  font-size: 12px;
+  opacity: 0.7;
 }
 .viewer-swatch {
   width: 24px;
