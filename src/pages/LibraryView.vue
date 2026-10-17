@@ -52,7 +52,7 @@
           <div class="st-display" style="font-size: 44px">
             {{ activeTitle }}
           </div>
-          <div class="st-mono pb-2">{{ t("library.count_songs", { n: library.filteredSongs.length }) }}</div>
+          <div class="st-mono pb-2">{{ t("library.count_songs", { n: library.total }) }}</div>
         </div>
 
         <!-- 空状态 -->
@@ -71,15 +71,44 @@
         </div>
 
         <!-- 卡片网格 -->
-        <div v-else class="card-grid">
-          <SongCard
-            v-for="song in library.filteredSongs"
-            :key="song.id"
-            :song="song"
-            @open="openViewer(song)"
-            @edit="editSong = song"
-            @delete="askDelete(song)"
-          />
+        <div v-else>
+          <div class="card-grid mb-6">
+            <SongCard
+              v-for="song in library.filteredSongs"
+              :key="song.id"
+              :song="song"
+              @open="openViewer(song)"
+              @edit="editSong = song"
+              @delete="askDelete(song)"
+            />
+          </div>
+
+          <!-- 分页栏 -->
+          <div v-if="library.total > 0" class="d-flex align-center justify-space-between flex-wrap ga-4 pt-4 pb-8 border-t">
+            <div class="d-flex align-center ga-3">
+              <span class="text-caption text-medium-emphasis">{{ t("library.page_size_label") }}</span>
+              <v-select
+                v-model="library.pageSize"
+                :items="[20, 50, 100]"
+                density="compact"
+                variant="outlined"
+                hide-details
+                style="max-width: 100px"
+              />
+              <span class="text-caption text-medium-emphasis">
+                {{ t("library.pagination_summary", { total: library.total, page: library.page, totalPages: library.totalPages }) }}
+              </span>
+            </div>
+
+            <v-pagination
+              v-if="library.totalPages > 1"
+              v-model="library.page"
+              :length="library.totalPages"
+              :total-visible="7"
+              density="comfortable"
+              rounded="circle"
+            />
+          </div>
         </div>
       </div>
     </v-main>
@@ -180,6 +209,22 @@ const emptyTitle = computed(() =>
 onMounted(() => {
   void library.refresh();
 });
+
+// 监听分页与搜索筛选变化
+watch(
+  () => [library.page, library.pageSize],
+  () => {
+    void library.loadSongs();
+  },
+);
+
+watch(
+  () => [library.search, library.activeCollection],
+  () => {
+    library.page = 1;
+    void library.loadSongs();
+  },
+);
 
 // ------- 打开 / 删除 -------
 

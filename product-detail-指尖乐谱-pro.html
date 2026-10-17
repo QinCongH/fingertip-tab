@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>指尖乐谱 Fingertip Tabs · 本地吉他谱桌面工具</title>
+  <style>
+    /* ========== CSS 变量体系（科技质感） ========== */
+    :root {
+      --color-primary: #0A0A0F;
+      --color-secondary: #00D9FF;
+      --color-accent: #7000FF;
+      --color-bg: #111118;
+      --color-card: #1A1A25;
+      --color-text: #E2E8F0;
+      --color-text-light: #8892A4;
+      --color-border: #2A2A3A;
+      --font-heading: 'Roboto', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+      --font-body: 'Roboto', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+      --max-width: 1200px;
+      --section-padding: 80px 0;
+      --border-radius: 16px;
+      --shadow: 0 4px 32px rgba(0,0,0,0.4);
+      --shadow-lg: 0 8px 48px rgba(0,217,255,0.1);
+      --glow: 0 0 20px rgba(0,217,255,0.3);
+      /* 动效可调变量 */
+      --anim-duration: 0.7s;
+      --anim-easing: cubic-bezier(0.25, 0.8, 0.25, 1);
+      --anim-delay-step: 0.1s;
+      --carousel-duration: 0.6s;
+      --hero-bg-type: 'radial';
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    body {
+      font-family: var(--font-body);
+      color: var(--color-text);
+      background: var(--color-primary);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; display: block; }
+    a { text-decoration: none; color: inherit; }
+    .container { max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
+    .section { padding: var(--section-padding); }
+    .section-title {
+      font-family: var(--font-heading);
+      font-size: 2.2rem;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 12px;
+      background: linear-gradient(90deg, var(--color-secondary), var(--color-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .section-subtitle {
+      font-size: 1.05rem;
+      color: var(--color-text-light);
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 40px;
+      border-radius: 50px;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: all var(--anim-duration) var(--anim-easing);
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+      color: #fff;
+      box-shadow: var(--glow);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 30px rgba(0,217,255,0.5); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-secondary);
+      border: 1px solid var(--color-secondary);
+    }
+    .btn-ghost:hover { background: rgba(0,217,255,0.1); }
+
+    /* ========== 滚动动画 ========== */
+    .scroll-animate {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity var(--anim-duration) var(--anim-easing), transform var(--anim-duration) var(--anim-easing);
+    }
+    .scroll-animate.visible { opacity: 1; transform: translateY(0); }
+    .scroll-animate[data-anim="fade-left"] { transform: translateX(-40px); }
+    .scroll-animate[data-anim="fade-left"].visible { transform: translateX(0); }
+    .scroll-animate[data-anim="fade-right"] { transform: translateX(40px); }
+    .scroll-animate[data-anim="fade-right"].visible { transform: translateX(0); }
+    .scroll-animate[data-anim="zoom"] { transform: scale(0.92); }
+    .scroll-animate[data-anim="zoom"].visible { transform: scale(1); }
+    .scroll-animate[data-anim="slide-up"] { transform: translateY(60px); }
+    .scroll-animate[data-anim="slide-up"].visible { transform: translateY(0); }
+
+    /* ========== 导航 ========== */
+    .navbar {
+      background: rgba(10,10,15,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--color-border);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+    .navbar .container { display: flex; justify-content: space-between; align-items: center; }
+    .nav-brand {
+      font-size: 1.3rem;
+      font-weight: 800;
+      background: linear-gradient(90deg, var(--color-secondary), var(--color-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      transition: all 0.4s ease;
+    }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a { font-size: 0.9rem; color: var(--color-text-light); transition: color 0.3s; }
+    .nav-links a:hover { color: var(--color-secondary); }
+    .nav-actions { display: flex; gap: 12px; align-items: center; }
+    .nav-ctrl-btn {
+      background: rgba(0,217,255,0.1);
+      border: 1px solid rgba(0,217,255,0.3);
+      color: var(--color-secondary);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .nav-ctrl-btn:hover { background: rgba(0,217,255,0.2); }
+
+    /* ========== 产品切换导航 ========== */
+    .product-switcher {
+      background: var(--color-bg);
+      border-bottom: 1px solid var(--color-border);
+      padding: 0;
+      position: sticky;
+      top: 65px;
+      z-index: 150;
+    }
+    .product-switcher .container {
+      display: flex;
+      align-items: stretch;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .product-switcher .container::-webkit-scrollbar { display: none; }
+    .product-tab {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      position: relative;
+      color: var(--color-text-light);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .product-tab:hover { color: var(--color-text); background: rgba(255,255,255,0.03); }
+    .product-tab.active {
+      color: var(--color-secondary);
+      border-bottom-color: var(--color-secondary);
+    }
+    .product-tab-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--color-card);
+      flex-shrink: 0;
+    }
+    .product-tab-icon-placeholder {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 14px;
+      overflow: hidden;
+    }
+    .product-tab-badge {
+      padding: 2px 8px;
+      border-radius: 50px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: rgba(0,217,255,0.15);
+      color: var(--color-secondary);
+    }
+    .product-tab.active .product-tab-badge { background: var(--color-secondary); color: #000; }
+
+    /* ========== 产品内容区（轮播/切换） ========== */
+    .product-carousel { overflow: hidden; position: relative; }
+    .product-slides {
+      display: flex;
+      transition: transform var(--carousel-duration) var(--anim-easing);
+      will-change: transform;
+    }
+    .product-slide {
+      min-width: 100%;
+      flex-shrink: 0;
+    }
+    /* 轮播过渡类型 */
+    .product-slides.anim-slide { /* 默认 translateX */ }
+    .product-slides.anim-fade { transition: none; }
+    .product-slide.fade-enter { animation: fadeSlideIn var(--carousel-duration) var(--anim-easing) forwards; }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ========== 首屏 ========== */
+    .hero {
+      position: relative;
+      padding: 120px 0;
+      overflow: hidden;
+      min-height: 90vh;
+      display: flex;
+      align-items: center;
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      transition: all 0.8s ease;
+    }
+    .hero-bg::before {
+      content: '';
+      position: absolute;
+      top: -40%;
+      right: -20%;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--hero-glow-1, rgba(112,0,255,0.15)), transparent 70%);
+      transition: background 0.8s ease;
+    }
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      bottom: -30%;
+      left: -10%;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--hero-glow-2, rgba(0,217,255,0.1)), transparent 70%);
+      transition: background 0.8s ease;
+    }
+    .hero .container { position: relative; z-index: 1; }
+    .hero-content { display: flex; align-items: center; gap: 80px; }
+    .hero-text { flex: 1; }
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: rgba(0,217,255,0.1);
+      border: 1px solid rgba(0,217,255,0.3);
+      border-radius: 50px;
+      font-size: 0.85rem;
+      color: var(--color-secondary);
+      margin-bottom: 24px;
+    }
+    .hero-tag-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--color-secondary);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .hero-title {
+      font-size: 3.2rem;
+      font-weight: 900;
+      line-height: 1.15;
+      color: #fff;
+      margin-bottom: 20px;
+    }
+    .hero-title span {
+      background: linear-gradient(90deg, var(--color-secondary), var(--color-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-desc { font-size: 1.1rem; color: var(--color-text-light); margin-bottom: 40px; max-width: 460px; }
+    .hero-stats { display: flex; gap: 40px; margin-bottom: 40px; }
+    .hero-stat-num { font-size: 2rem; font-weight: 900; color: var(--color-secondary); }
+    .hero-stat-label { font-size: 0.85rem; color: var(--color-text-light); }
+    .hero-image { flex: 1; text-align: center; position: relative; }
+    .hero-image .hero-img {
+      width: 100%;
+      max-width: 460px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow-lg);
+      transition: transform 0.5s ease;
+      margin: 0 auto;
+    }
+    .hero-image:hover .hero-img { transform: scale(1.04) translateY(-8px); }
+    /* 图片占位 */
+    .img-placeholder {
+      background: linear-gradient(135deg, #1A1A25, #111118);
+      border: 1px solid #2A2A3A;
+      border-radius: var(--border-radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-light);
+      font-size: 0.9rem;
+    }
+
+    /* ========== 卖点 ========== */
+    .features { background: var(--color-bg); }
+    .features-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .feature-card {
+      padding: 32px;
+      border-radius: var(--border-radius);
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      transition: all var(--anim-duration) var(--anim-easing);
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    .feature-card:hover { border-color: var(--color-secondary); box-shadow: 0 0 20px rgba(0,217,255,0.08); transform: translateY(-2px); }
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(0,217,255,0.15), rgba(112,0,255,0.15));
+      border: 1px solid rgba(0,217,255,0.2);
+      font-size: 22px;
+      overflow: hidden;
+    }
+    .feature-icon img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
+    .feature-num {
+      font-size: 2rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .feature-title { font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .feature-desc { font-size: 0.9rem; color: var(--color-text-light); line-height: 1.6; }
+
+    /* ========== 产品展示 ========== */
+    .showcase-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .showcase-item {
+      border-radius: var(--border-radius);
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+      background: var(--color-card);
+      transition: all 0.3s ease;
+    }
+    .showcase-item:hover { border-color: var(--color-secondary); box-shadow: var(--shadow-lg); }
+    .showcase-item img, .showcase-item .img-ph {
+      width: 100%;
+      height: 240px;
+      object-fit: cover;
+      transition: transform 0.5s ease;
+    }
+    .showcase-item:hover img { transform: scale(1.05); }
+    .showcase-item-label {
+      padding: 16px 20px;
+      font-size: 0.9rem;
+      color: var(--color-text-light);
+      border-top: 1px solid var(--color-border);
+    }
+    .showcase-item-label strong { color: #fff; display: block; margin-bottom: 4px; }
+
+    /* ========== 场景 ========== */
+    .scenario-card {
+      max-width: 900px;
+      margin: 0 auto;
+      border-radius: var(--border-radius);
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+      background: var(--color-card);
+    }
+    .scenario-card img, .scenario-card .img-ph {
+      width: 100%;
+      height: 450px;
+      object-fit: cover;
+    }
+    .scenario-card-body { padding: 32px; }
+    .scenario-card-title { font-size: 1.4rem; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .scenario-card-desc { color: var(--color-text-light); }
+
+    /* ========== 参数 ========== */
+    .specs { background: var(--color-bg); }
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--color-border);
+      border-radius: var(--border-radius);
+      overflow: hidden;
+    }
+    .spec-item { display: flex; background: var(--color-card); }
+    .spec-item:nth-child(odd) { border-right: 1px solid var(--color-border); }
+    .spec-label { width: 140px; padding: 14px 20px; font-size: 0.85rem; color: var(--color-text-light); flex-shrink: 0; border-right: 1px solid var(--color-border); }
+    .spec-value { flex: 1; padding: 14px 20px; font-size: 0.85rem; color: #fff; }
+
+    /* ========== CTA ========== */
+    .cta { text-align: center; position: relative; overflow: hidden; }
+    .cta::before {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,217,255,0.08), transparent 70%);
+      transform: translate(-50%, -50%);
+    }
+    .cta-title { font-size: 2.2rem; font-weight: 800; color: #fff; margin-bottom: 16px; position: relative; }
+    .cta-desc { font-size: 1.05rem; color: var(--color-text-light); margin-bottom: 36px; max-width: 500px; margin-left: auto; margin-right: auto; position: relative; }
+    .cta .container { position: relative; z-index: 1; }
+    .cta-price {
+      font-size: 2.5rem;
+      font-weight: 900;
+      background: linear-gradient(90deg, var(--color-secondary), var(--color-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    .cta-price-sub { color: var(--color-text-light); font-size: 0.9rem; margin-bottom: 32px; }
+
+    /* ========== 页脚 ========== */
+    .footer { border-top: 1px solid var(--color-border); padding: 32px 0; text-align: center; font-size: 0.8rem; color: var(--color-text-light); }
+
+    /* ========== 动效控制面板 ========== */
+    .ctrl-panel {
+      position: fixed;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 1000;
+      transition: transform 0.4s ease, right 0.4s ease;
+    }
+    .ctrl-panel.collapsed { right: -320px; }
+    .ctrl-toggle {
+      position: absolute;
+      left: -44px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 80px;
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      color: var(--color-secondary);
+      font-size: 18px;
+      transition: background 0.3s;
+    }
+    .ctrl-toggle:hover { background: rgba(0,217,255,0.05); }
+    .ctrl-toggle span { font-size: 0.6rem; color: var(--color-text-light); writing-mode: vertical-lr; letter-spacing: 1px; }
+    .ctrl-body {
+      width: 320px;
+      background: rgba(10,10,15,0.96);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--color-border);
+      border-radius: 12px 0 0 12px;
+      padding: 20px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    .ctrl-body::-webkit-scrollbar { width: 4px; }
+    .ctrl-body::-webkit-scrollbar-track { background: transparent; }
+    .ctrl-body::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+    .ctrl-section { margin-bottom: 20px; }
+    .ctrl-section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--color-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .ctrl-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .ctrl-label { font-size: 0.8rem; color: var(--color-text-light); flex: 1; min-width: 80px; }
+    .ctrl-input {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      color: var(--color-text);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      width: 100px;
+      transition: border-color 0.2s;
+    }
+    .ctrl-input:focus { outline: none; border-color: var(--color-secondary); }
+    .ctrl-select {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      color: var(--color-text);
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      flex: 1;
+      cursor: pointer;
+    }
+    .ctrl-range {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 4px;
+      background: var(--color-border);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .ctrl-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--color-secondary);
+      cursor: pointer;
+    }
+    .ctrl-range-val { font-size: 0.75rem; color: var(--color-secondary); width: 36px; text-align: right; }
+    .ctrl-apply-btn {
+      width: 100%;
+      padding: 9px;
+      background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      margin-top: 4px;
+    }
+    .ctrl-apply-btn:hover { opacity: 0.9; }
+    .ctrl-reset-btn {
+      width: 100%;
+      padding: 7px;
+      background: transparent;
+      color: var(--color-text-light);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 6px;
+    }
+    .ctrl-reset-btn:hover { border-color: var(--color-text-light); color: var(--color-text); }
+
+    /* 图片上传按钮 */
+    .img-upload-zone {
+      border: 1.5px dashed var(--color-border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.78rem;
+      color: var(--color-text-light);
+      position: relative;
+      overflow: hidden;
+    }
+    .img-upload-zone:hover { border-color: var(--color-secondary); color: var(--color-secondary); background: rgba(0,217,255,0.03); }
+    .img-upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .img-upload-zone .upload-icon { font-size: 20px; margin-bottom: 4px; }
+    .img-slot-list { display: flex; flex-direction: column; gap: 8px; }
+    .img-slot-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      font-size: 0.78rem;
+    }
+    .img-slot-thumb {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .img-slot-name { flex: 1; color: var(--color-text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .img-slot-change {
+      background: rgba(0,217,255,0.1);
+      border: none;
+      color: var(--color-secondary);
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      position: relative;
+      overflow: hidden;
+    }
+    .img-slot-change input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+    /* 图标选择 */
+    .icon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .icon-option {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .icon-option:hover, .icon-option.selected { border-color: var(--color-secondary); background: rgba(0,217,255,0.1); }
+    .icon-option.custom-icon { font-size: 11px; color: var(--color-text-light); }
+
+    /* 颜色选择 */
+    .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+    .color-swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .color-swatch.active, .color-swatch:hover { border-color: #fff; transform: scale(1.1); }
+    .color-input-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+    .color-picker-input { width: 36px; height: 28px; padding: 2px; border-radius: 6px; cursor: pointer; border: 1px solid var(--color-border); background: var(--color-card); }
+    .color-hex-input { flex: 1; }
+
+    /* 背景控制 */
+    .bg-preview {
+      width: 100%;
+      height: 60px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border: 1px solid var(--color-border);
+      transition: all 0.3s;
+    }
+
+    /* 产品管理 */
+    .product-list { display: flex; flex-direction: column; gap: 8px; }
+    .product-list-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .product-list-item.active { border-color: var(--color-secondary); background: rgba(0,217,255,0.06); }
+    .product-list-item-name { flex: 1; color: var(--color-text); font-weight: 500; }
+    .product-list-item-actions { display: flex; gap: 4px; }
+    .pli-btn {
+      background: transparent;
+      border: none;
+      color: var(--color-text-light);
+      cursor: pointer;
+      padding: 3px;
+      border-radius: 4px;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    .pli-btn:hover { color: var(--color-secondary); }
+
+    /* toast */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--color-card);
+      border: 1px solid var(--color-secondary);
+      color: var(--color-text);
+      padding: 10px 24px;
+      border-radius: 50px;
+      font-size: 0.85rem;
+      z-index: 9999;
+      opacity: 0;
+      transition: all 0.3s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ========== 响应式 ========== */
+    @media (max-width: 1023px) {
+      .hero-content { flex-direction: column; text-align: center; }
+      .hero-desc { margin: 0 auto 40px; }
+      .hero-stats { justify-content: center; }
+      .hero-title { font-size: 2.4rem; }
+      .features-grid { grid-template-columns: 1fr; }
+      .showcase-grid { grid-template-columns: 1fr; }
+      .specs-grid { grid-template-columns: 1fr; }
+      .spec-item:nth-child(odd) { border-right: none; }
+      .ctrl-panel { display: none; }
+    }
+    @media (max-width: 767px) {
+      :root { --section-padding: 60px 0; }
+      .hero { padding: 80px 0; min-height: auto; }
+      .hero-title { font-size: 2rem; }
+      .section-title { font-size: 1.6rem; }
+      .hero-stats { flex-direction: column; gap: 16px; }
+      .scenario-card img { height: 280px; }
+      .nav-links { display: none; }
+      .nav-actions { display: none; }
+    }
+
+    /* ========== 打印样式（PDF导出） ========== */
+    @media print {
+      .ctrl-panel, .ctrl-toggle, .product-switcher, .navbar, .footer,
+      .toast, .btn-ghost, nav { display: none !important; }
+      body { background: #fff !important; color: #111 !important; }
+      .hero { background: #f0f4ff !important; min-height: auto !important; padding: 40px 0 !important; }
+      .hero-bg { display: none !important; }
+      .hero-title, .section-title { color: #1E293B !important; -webkit-text-fill-color: #1E293B !important; background: none !important; }
+      .hero-title span { color: #3B82F6 !important; -webkit-text-fill-color: #3B82F6 !important; }
+      .hero-desc, .feature-card-desc, .scenario-card-desc, .spec-value { color: #334155 !important; }
+      .feature-card { background: #f8fafc !important; border: 1px solid #e2e8f0 !important; break-inside: avoid; }
+      .showcase-card { break-inside: avoid; }
+      .product-slide { display: block !important; width: 100% !important; opacity: 1 !important; transform: none !important; }
+      .product-slides { transform: none !important; display: block !important; }
+      .product-carousel { overflow: visible !important; }
+      .scroll-animate { opacity: 1 !important; transform: none !important; }
+      .section { padding: 30px 0 !important; }
+      .cta { background: #1E293B !important; }
+      .cta-price { color: #fff !important; }
+      @page { margin: 20mm; }
+    }
+
+    /* ========== 文字编辑面板样式 ========== */
+    .text-edit-field { margin-bottom: 8px; }
+    .text-edit-label { font-size: 0.72rem; color: var(--color-text-light); margin-bottom: 3px; display: block; }
+    .text-edit-input {
+      width: 100%; background: var(--color-bg); border: 1px solid var(--color-border);
+      border-radius: 5px; color: var(--color-text); padding: 5px 8px;
+      font-size: 0.78rem; font-family: var(--font-body); resize: vertical;
+      transition: border-color 0.2s;
+    }
+    .text-edit-input:focus { outline: none; border-color: var(--color-secondary); }
+    .text-edit-group-title {
+      font-size: 0.75rem; font-weight: 700; color: var(--color-secondary);
+      margin: 12px 0 6px; padding-top: 8px; border-top: 1px solid var(--color-border);
+    }
+    .text-edit-btn-row { display: flex; gap: 6px; margin-top: 10px; }
+    .text-edit-save-btn {
+      flex: 1; background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+      color: #fff; border: none; border-radius: 5px; padding: 7px 0; font-size: 0.8rem; cursor: pointer;
+    }
+    .text-edit-reset-btn {
+      flex: 1; background: transparent; border: 1px solid var(--color-border);
+      color: var(--color-text-light); border-radius: 5px; padding: 7px 0; font-size: 0.8rem; cursor: pointer;
+    }
+    .text-edit-dl-btn {
+      width: 100%; background: rgba(0,217,255,0.08); border: 1px dashed rgba(0,217,255,0.35);
+      color: var(--color-secondary); border-radius: 5px; padding: 7px 0; font-size: 0.8rem; cursor: pointer; margin-top: 6px;
+    }
+    .text-edit-dl-btn:hover { background: rgba(0,217,255,0.15); }
+
+    /* ========== 导出中心样式 ========== */
+    .export-btn-row { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
+    .export-btn {
+      display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+      border-radius: 7px; border: none; cursor: pointer; font-size: 0.82rem; font-weight: 600;
+      transition: all 0.25s ease; width: 100%;
+    }
+    .export-btn-pdf { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); color: #f87171; }
+    .export-btn-pdf:hover { background: rgba(239,68,68,0.3); }
+    .export-btn-jpg { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.35); color: #34d399; }
+    .export-btn-jpg:hover { background: rgba(16,185,129,0.3); }
+    .export-btn-psd { background: rgba(112,0,255,0.15); border: 1px solid rgba(112,0,255,0.35); color: #a78bfa; }
+    .export-btn-psd:hover { background: rgba(112,0,255,0.3); }
+    .export-hint { font-size: 0.7rem; color: var(--color-text-light); line-height: 1.5; margin-top: 6px; }
+    .export-modal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); z-index: 9999; display: none;
+      align-items: center; justify-content: center;
+    }
+    .export-modal.show { display: flex; }
+    .export-modal-box {
+      background: #1A1A25; border: 1px solid var(--color-border); border-radius: 12px;
+      padding: 28px; max-width: 560px; width: 90%; max-height: 80vh; overflow-y: auto;
+    }
+    .export-modal-title { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 16px; }
+    .export-modal-content { font-size: 0.8rem; color: var(--color-text-light); line-height: 1.7; }
+    .export-modal-content pre {
+      background: #0A0A0F; border: 1px solid var(--color-border); border-radius: 6px;
+      padding: 12px; overflow-x: auto; font-size: 0.72rem; color: #a8ff78; margin: 10px 0;
+    }
+    .export-modal-close {
+      background: var(--color-border); border: none; color: var(--color-text); padding: 8px 20px;
+      border-radius: 6px; cursor: pointer; margin-top: 14px; font-size: 0.82rem;
+    }
+    .export-copy-btn {
+      background: rgba(0,217,255,0.12); border: 1px solid rgba(0,217,255,0.3); color: var(--color-secondary);
+      padding: 6px 14px; border-radius: 5px; cursor: pointer; font-size: 0.78rem; margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<!-- ===== 动效控制面板 ===== -->
+<div class="ctrl-panel" id="ctrlPanel">
+  <div class="ctrl-toggle" id="ctrlToggle" title="展开/收起控制面板">
+    <span>⚙</span>
+    <span>设 置</span>
+  </div>
+  <div class="ctrl-body">
+    <div style="font-size:1rem;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+      <span>🎛</span> 设计控制台
+    </div>
+
+    <!-- 产品管理 -->
+    <div class="ctrl-section">
+      <div class="ctrl-section-title">📦 产品管理</div>
+      <div class="product-list" id="productList"></div>
+      <button class="ctrl-apply-btn" style="margin-top:10px;" onclick="addProduct()">+ 添加产品</button>
+    </div>
+
+    <!-- 动效控制 -->
+    <div class="ctrl-section">
+      <div class="ctrl-section-title">✨ 动效调节</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">轮播方式</span>
+        <select class="ctrl-select" id="carouselMode">
+          <option value="slide">滑动切换</option>
+          <option value="fade">淡入淡出</option>
+          <option value="zoom">缩放切换</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">切换速度</span>
+        <input type="range" class="ctrl-range" id="carouselSpeed" min="200" max="1200" value="600" step="50">
+        <span class="ctrl-range-val" id="carouselSpeedVal">0.6s</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">入场时长</span>
+        <input type="range" class="ctrl-range" id="animDuration" min="300" max="1200" value="700" step="50">
+        <span class="ctrl-range-val" id="animDurationVal">0.7s</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">缓动曲线</span>
+        <select class="ctrl-select" id="animEasing">
+          <option value="cubic-bezier(0.25,0.8,0.25,1)">平滑（默认）</option>
+          <option value="ease">标准 ease</option>
+          <option value="ease-in-out">进出缓动</option>
+          <option value="cubic-bezier(0.34,1.56,0.64,1)">弹跳回弹</option>
+          <option value="cubic-bezier(0.22,1,0.36,1)">超出减速</option>
+          <option value="linear">线性</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">入场动效</span>
+        <select class="ctrl-select" id="animType">
+          <option value="">淡出上升（默认）</option>
+          <option value="fade-left">左侧淡入</option>
+          <option value="fade-right">右侧淡入</option>
+          <option value="zoom">缩放淡入</option>
+          <option value="slide-up">上滑入场</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">自动播放</span>
+        <select class="ctrl-select" id="autoPlay">
+          <option value="0">关闭</option>
+          <option value="3000">3秒</option>
+          <option value="5000">5秒</option>
+          <option value="8000">8秒</option>
+        </select>
+      </div>
+      <button class="ctrl-apply-btn" onclick="applyAnimSettings()">应用动效</button>
+    </div>
+
+    <!-- 色彩主题 -->
+    <div class="ctrl-section">
+      <div class="ctrl-section-title">🎨 色彩主题</div>
+      <div class="color-swatches" id="themeSwatches">
+        <div class="color-swatch active" style="background:linear-gradient(135deg,#00D9FF,#7000FF)" data-secondary="#00D9FF" data-accent="#7000FF" title="极光蓝紫"></div>
+        <div class="color-swatch" style="background:linear-gradient(135deg,#FF6B35,#F7C948)" data-secondary="#FF6B35" data-accent="#F7C948" title="橙金科技"></div>
+        <div class="color-swatch" style="background:linear-gradient(135deg,#00FF87,#00B4D8)" data-secondary="#00FF87" data-accent="#00B4D8" title="翠绿海蓝"></div>
+        <div class="color-swatch" style="background:linear-gradient(135deg,#FF0080,#7928CA)" data-secondary="#FF0080" data-accent="#7928CA" title="玫红紫罗兰"></div>
+        <div class="color-swatch" style="background:linear-gradient(135deg,#F9C74F,#F8961E)" data-secondary="#F9C74F" data-accent="#F8961E" title="暖金橙"></div>
+        <div class="color-swatch" style="background:linear-gradient(135deg,#90E0EF,#48CAE4)" data-secondary="#90E0EF" data-accent="#48CAE4" title="冰霜蓝"></div>
+      </div>
+      <div class="color-input-row">
+        <input type="color" class="color-picker-input" id="colorSecondary" value="#00D9FF" title="主色">
+        <input type="text" class="ctrl-input color-hex-input" id="colorSecondaryHex" value="#00D9FF" placeholder="主色 #HEX">
+      </div>
+      <div class="color-input-row">
+        <input type="color" class="color-picker-input" id="colorAccent" value="#7000FF" title="强调色">
+        <input type="text" class="ctrl-input color-hex-input" id="colorAccentHex" value="#7000FF" placeholder="强调色 #HEX">
+      </div>
+      <button class="ctrl-apply-btn" onclick="applyColors()">应用色彩</button>
+    </div>
+
+    <!-- 背景控制 -->
+    <div class="ctrl-section">
+      <div class="ctrl-section-title">🌌 页面背景</div>
+      <div class="bg-preview" id="bgPreview" style="background:linear-gradient(135deg,#0A0A0F,#111118)"></div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">背景类型</span>
+        <select class="ctrl-select" id="bgType" onchange="updateBgPreview()">
+          <option value="dark">极致暗黑</option>
+          <option value="navy">深海蓝黑</option>
+          <option value="gradient">渐变深色</option>
+          <option value="glass">磨砂玻璃</option>
+          <option value="custom">自定义颜色</option>
+          <option value="image">背景图片</option>
+        </select>
+      </div>
+      <div class="ctrl-row" id="bgCustomColorRow" style="display:none;">
+        <span class="ctrl-label">自定义色</span>
+        <input type="color" class="color-picker-input" id="bgCustomColor" value="#0A0A0F" onchange="updateBgPreview()">
+        <input type="text" class="ctrl-input" id="bgCustomColorHex" value="#0A0A0F" style="width:80px;">
+      </div>
+      <div class="img-upload-zone" id="bgImgZone" style="display:none;">
+        <input type="file" accept="image/*" onchange="handleBgUpload(event)">
+        <div class="upload-icon">🖼</div>
+        <div>点击上传背景图片</div>
+      </div>
+      <button class="ctrl-apply-btn" onclick="applyBackground()">应用背景</button>
+    </div>
+
+    <!-- 图片替换 -->
+    <div class="ctrl-section">
+      <div class="ctrl-section-title">🖼 图片替换</div>
+      <div class="img-slot-list" id="imgSlotList"></div>
+    </div>
+
+    <!-- 图标自定义 -->
+    <div class="ctrl-section">
+      <div class="ctrl-section-title">🔲 卖点图标</div>
+      <div style="font-size:0.75rem;color:var(--color-text-light);margin-bottom:8px;">当前产品的4个卖点图标</div>
+      <div class="icon-grid" id="iconGrid"></div>
+      <div style="margin-top:10px;font-size:0.75rem;color:var(--color-text-light)">也可输入自定义Emoji：</div>
+      <div class="ctrl-row" style="margin-top:6px;">
+        <span class="ctrl-label">图标位置</span>
+        <select class="ctrl-select" id="iconSlot" style="width:60px;">
+          <option value="0">1</option>
+          <option value="1">2</option>
+          <option value="2">3</option>
+          <option value="3">4</option>
+        </select>
+        <input type="text" class="ctrl-input" id="customIconInput" placeholder="输入emoji" style="width:80px;">
+      </div>
+      <button class="ctrl-apply-btn" onclick="applyCustomIcon()">应用图标</button>
+    </div>
+
+    <button class="ctrl-reset-btn" onclick="resetAll()">↺ 重置所有设置</button>
+
+    <!-- ✏️ 文字编辑 -->
+    <div class="ctrl-section" style="margin-top:4px;">
+      <div class="ctrl-section-title">✏️ 文字编辑</div>
+      <div style="font-size:0.72rem;color:var(--color-text-light);margin-bottom:10px;">实时修改当前产品的所有文本，点击「保存文案」后生效。</div>
+      <div id="textEditFields"></div>
+      <div class="text-edit-btn-row">
+        <button class="text-edit-save-btn" onclick="saveTextEdits()">✅ 保存文案</button>
+        <button class="text-edit-reset-btn" onclick="resetTextEdits()">↺ 重置</button>
+      </div>
+      <button class="text-edit-dl-btn" onclick="downloadEditedHtml()">⬇ 下载已修改的 HTML</button>
+    </div>
+
+    <!-- 📤 导出中心 -->
+    <div class="ctrl-section" style="margin-top:4px;">
+      <div class="ctrl-section-title">📤 导出中心</div>
+      <div class="export-btn-row">
+        <button class="export-btn export-btn-pdf" onclick="exportPDF()">
+          <span>📄</span><span>导出 PDF</span>
+        </button>
+        <button class="export-btn export-btn-jpg" onclick="exportJPG()">
+          <span>🖼</span><span>导出 JPG 图片</span>
+        </button>
+        <button class="export-btn export-btn-psd" onclick="showPSDGuide()">
+          <span>📦</span><span>生成 PSD 图层说明书</span>
+        </button>
+      </div>
+      <div class="export-hint">
+        PDF：使用 Chrome「另存为PDF」；<br>
+        JPG：截取完整页面（需约5-10秒）；<br>
+        PSD：生成图层规格 + Python 脚本。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PSD 导出说明弹窗 ===== -->
+<div class="export-modal" id="psdModal">
+  <div class="export-modal-box">
+    <div class="export-modal-title">📦 PSD 图层说明书 &amp; 生成脚本</div>
+    <div class="export-modal-content" id="psdModalContent"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:14px;">
+      <button class="export-modal-close" onclick="document.getElementById('psdModal').classList.remove('show')">✕ 关闭</button>
+      <button class="export-copy-btn" onclick="copyPsdContent()">📋 复制全部</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 导航 ===== -->
+<nav class="navbar">
+  <div class="container">
+    <span class="nav-brand" id="navBrand">指尖乐谱</span>
+    <div class="nav-links">
+      <a href="#features">核心功能</a>
+      <a href="#showcase">功能界面</a>
+      <a href="#scenarios">使用场景</a>
+      <a href="#cta">获取体验</a>
+    </div>
+    <div class="nav-actions">
+      <button class="nav-ctrl-btn" onclick="togglePanel()">⚙ 设计控制台</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== 产品切换栏 ===== -->
+<div class="product-switcher">
+  <div class="container" id="productTabs"></div>
+</div>
+
+<!-- ===== 产品内容轮播 ===== -->
+<div class="product-carousel" id="productCarousel">
+  <div class="product-slides anim-slide" id="productSlides"></div>
+</div>
+
+<!-- ===== 页脚 ===== -->
+<footer class="footer">
+  <div class="container">
+    <p id="footerText">&copy; 2026 指尖乐谱 Fingertip Tabs · 本地优先的吉他谱桌面工具</p>
+  </div>
+</footer>
+
+<script>
+// =====================================================
+// 产品数据结构
+// =====================================================
+const ICON_PRESETS = ['💻','⚡','🔋','🎨','🔊','📷','🛡','🌡','🖥','📱','🎮','✏️','🔬','💡','🏆'];
+
+const defaultProducts = [
+  {
+    id: 1,
+    name: '指尖乐谱 Fingertip Tabs',
+    badge: 'v0.3.0',
+    tabIcon: '🎸',
+    tag: 'Tauri v2 · 本地优先 · 吉他表示谱工具',
+    title: '指尖乐谱',
+    titleHighlight: 'Fingertip Tabs',
+    desc: '本地吉他谱桌面工具：曲谱集中管理、四种看谱模式、AI 摄像头摇头翻页。全部数据保存在本机，离线可用、隐私可控。',
+    stats: [
+      { num: '4 种', label: '看谱模式' },
+      { num: '100%', label: '本地存储' },
+      { num: 'AI', label: '摇头翻页' },
+    ],
+    heroImg: './product-images/指尖乐谱/main.png',
+    heroImgAlt: '指尖乐谱 曲谱库界面',
+    ctaText: '下载体验',
+    ctaPrice: '本地优先 · 离线可用',
+    ctaPriceSub: '指尖乐谱 v0.3.0 · Windows / macOS / Linux',
+    ctaTitle: '把散落的吉他谱，收进一个本地曲谱库',
+    ctaDesc: '无需登录、无需联网，导入即用，专注看谱本身',
+    themeGlow1: 'rgba(0,217,255,0.16)',
+    themeGlow2: 'rgba(112,0,255,0.10)',
+    features: [
+      { icon: '🎼', num: '01', title: '曲谱集中管理', desc: '分组侧栏多对多归类，卡片网格浏览、关键词搜索，支持批量导入与拖拽导入。' },
+      { icon: '📖', num: '02', title: '四种看谱模式', desc: '固定翻页、垂直滚动、双页水平对齐、AI 摇头翻页，一键切换适配不同演奏姿势。' },
+      { icon: '🎸', num: '03', title: 'GP 谱播放引擎', desc: '内置 alphaTab，Guitar Pro 谱可变速播放、段落循环、节拍器与多轨切换。' },
+      { icon: '🎤', num: '04', title: 'AI 摇头翻页', desc: '摄像头画面本地帧差识别头部水平摆动，不用腾出手，抬头一摆自动翻页。' },
+      { icon: '📱', num: '05', title: '局域网共享', desc: '一键生成二维码，手机与电脑连同一 Wi-Fi 扫码即看，无需数据线或云端。' },
+      { icon: '💾', num: '06', title: '数据自主可控', desc: '自定义库目录、UUID 重命名存储、缩略图索引，一键备份 / 恢复 ZIP 存档。' },
+    ],
+    showcaseItems: [
+      { img: './product-images/指尖乐谱/detail-1.png', title: '导入曲谱', desc: '图片曲谱 / Guitar Pro 双通道导入，支持 Ctrl+V 粘贴截图录入' },
+      { img: './product-images/指尖乐谱/detail-2.png', title: 'GP 谱播放器', desc: '红框游标跟随播放，变速、循环、节拍器与多声部一览无余' },
+      { img: './product-images/指尖乐谱/detail-3.png', title: '自动滚动看谱', desc: '按像素/秒 或 BPM 换算自动滚动，空格键即可随时启停' },
+    ],
+    scenarioImg: './product-images/指尖乐谱/scene.png',
+    scenarioTitle: '手机扫码，曲谱随手带',
+    scenarioDesc: '排练、上课、演出前临时想看某首谱子，不必再传文件。开启局域网共享，手机与电脑连接同一 Wi-Fi，扫码即可用浏览器打开整套曲谱，随点随看。',
+    specs: [
+      ['应用名称', '指尖乐谱 Fingertip Tabs'],
+      ['当前版本', 'v0.3.0'],
+      ['技术栈', 'Tauri v2 + Vue 3 + TypeScript'],
+      ['UI 组件', 'Vuetify 4 · MDI 图标'],
+      ['曲谱引擎', 'alphaTab 1.8（Guitar Pro）'],
+      ['本地存储', 'SQLite（sqlx）+ 本地文件夹'],
+      ['导入格式', '图片（JPG / PNG 等）/ Guitar Pro'],
+      ['OCR 录入', 'Tesseract.js 截图识别'],
+      ['看谱模式', '固定翻页 / 垂直滚动 / 双页对齐 / AI 摇头'],
+      ['AI 翻页', '摄像头帧差识别 · 3 档灵敏度'],
+      ['自动滚动', '像素/秒 或 BPM 换算'],
+      ['备份恢复', '一键 ZIP 导出 / 导入'],
+      ['界面语言', '简体中文 / English'],
+      ['支持平台', 'Windows / macOS / Linux'],
+    ],
+  }
+];
+
+// =====================================================
+// 全局状态
+// =====================================================
+let products = JSON.parse(JSON.stringify(defaultProducts));
+let currentIdx = 0;
+let autoPlayTimer = null;
+let carouselMode = 'slide';
+let imageRegistry = {}; // { slotKey: blobUrl }
+
+// =====================================================
+// 工具函数
+// =====================================================
+function showToast(msg, dur = 2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function imgSrc(src, alt, cls, style) {
+  return `<img src="${src}" alt="${alt||''}" class="${cls||''}" style="${style||''}" onerror="this.style.background='linear-gradient(135deg,#1A1A25,#111118)';this.style.minHeight='200px';this.removeAttribute('src');">`;
+}
+
+function randId() { return Math.random().toString(36).substr(2,9); }
+
+// =====================================================
+// 渲染产品幻灯片
+// =====================================================
+function renderSlide(p, idx) {
+  const f = p.features || [];
+  const sh = p.showcaseItems || [];
+  const sp = p.specs || [];
+  const heroImgKey = `product_${p.id}_hero`;
+  const heroImgSrc = imageRegistry[heroImgKey] || p.heroImg || '';
+
+  const featureCards = f.map((ft, fi) => {
+    const iconKey = `product_${p.id}_icon_${fi}`;
+    const iconVal = imageRegistry[iconKey] || ft.icon || '';
+    const isUrl = iconVal.startsWith('http') || iconVal.startsWith('blob') || iconVal.startsWith('data') || iconVal.startsWith('/') || iconVal.startsWith('C:');
+    const iconHtml = isUrl
+      ? `<div class="feature-icon"><img src="${iconVal}" onerror="this.parentElement.textContent='${ft.icon}'"></div>`
+      : `<div class="feature-icon">${iconVal}</div>`;
+    return `
+      <div class="feature-card scroll-animate" data-anim="">
+        ${iconHtml}
+        <div class="feature-info">
+          <h3 class="feature-title">${ft.title}</h3>
+          <p class="feature-desc">${ft.desc}</p>
+        </div>
+      </div>`;
+  }).join('');
+
+  const showcaseHtml = sh.map((s, si) => {
+    const imgKey = `product_${p.id}_showcase_${si}`;
+    const imgSrc2 = imageRegistry[imgKey] || s.img || '';
+    return `
+      <div class="showcase-item scroll-animate">
+        ${imgSrc2 ? `<img src="${imgSrc2}" alt="${s.title}" style="height:240px;object-fit:cover;" onerror="this.style.background='linear-gradient(135deg,#1A1A25,#111118)';this.style.minHeight='240px';">` : `<div class="img-placeholder" style="height:240px;">暂无图片</div>`}
+        <div class="showcase-item-label"><strong>${s.title}</strong>${s.desc}</div>
+      </div>`;
+  }).join('');
+
+  const scenImgKey = `product_${p.id}_scenario`;
+  const scenImgSrc = imageRegistry[scenImgKey] || p.scenarioImg || '';
+
+  const specsHtml = sp.map(([l,v]) => `
+    <div class="spec-item">
+      <span class="spec-label">${l}</span>
+      <span class="spec-value">${v}</span>
+    </div>`).join('');
+
+  return `
+    <div class="product-slide" data-product-id="${p.id}">
+      <!-- 首屏 -->
+      <section class="hero" id="hero_${idx}">
+        <div class="hero-bg" style="--hero-glow-1:${p.themeGlow1||'rgba(112,0,255,0.15)'};--hero-glow-2:${p.themeGlow2||'rgba(0,217,255,0.1)'}"></div>
+        <div class="container">
+          <div class="hero-content">
+            <div class="hero-text">
+              <div class="hero-tag"><span class="hero-tag-dot"></span> ${p.tag}</div>
+              <h1 class="hero-title">${p.title}<br><span>${p.titleHighlight}</span></h1>
+              <p class="hero-desc">${p.desc}</p>
+              <div class="hero-stats">
+                ${(p.stats||[]).map(s => `<div><div class="hero-stat-num">${s.num}</div><div class="hero-stat-label">${s.label}</div></div>`).join('')}
+              </div>
+              <a href="#cta_${idx}" class="btn btn-primary">${p.ctaText||'立即购买'}</a>
+            </div>
+            <div class="hero-image">
+              ${heroImgSrc ? `<img class="hero-img" src="${heroImgSrc}" alt="${p.heroImgAlt||p.name}" onerror="this.style.background='linear-gradient(135deg,#1A1A25,#111118)';this.style.minHeight='320px';this.removeAttribute('src');">` : `<div class="hero-img img-placeholder" style="min-height:320px;">产品主图</div>`}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 核心卖点 -->
+      <section class="features section" id="features">
+        <div class="container">
+          <h2 class="section-title scroll-animate">核心功能</h2>
+          <p class="section-subtitle scroll-animate">六项核心能力，覆盖从导入到演奏的全流程</p>
+          <div class="features-grid">${featureCards}</div>
+        </div>
+      </section>
+
+      <!-- 产品细节 -->
+      <section class="showcase section" id="showcase">
+        <div class="container">
+          <h2 class="section-title scroll-animate">功能界面</h2>
+          <p class="section-subtitle scroll-animate">真实运行截图，所见即所得</p>
+          <div class="showcase-grid">${showcaseHtml}</div>
+        </div>
+      </section>
+
+      <!-- 应用场景 -->
+      <section class="scenarios section" id="scenarios">
+        <div class="container">
+          <h2 class="section-title scroll-animate">使用场景</h2>
+          <p class="section-subtitle scroll-animate">练琴、上课、排练，曲谱随手可取</p>
+          <div class="scenario-card scroll-animate">
+            ${scenImgSrc ? `<img src="${scenImgSrc}" alt="${p.scenarioTitle}" style="height:450px;object-fit:cover;" onerror="this.style.background='linear-gradient(135deg,#1A1A25,#111118)';this.style.minHeight='320px';">` : `<div class="img-placeholder" style="height:320px;">场景配图</div>`}
+            <div class="scenario-card-body">
+              <h3 class="scenario-card-title">${p.scenarioTitle}</h3>
+              <p class="scenario-card-desc">${p.scenarioDesc}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 参数 -->
+      <section class="specs section">
+        <div class="container">
+          <h2 class="section-title scroll-animate">技术规格</h2>
+          <p class="section-subtitle scroll-animate">版本与能力一览</p>
+          <div class="specs-grid scroll-animate">${specsHtml}</div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="cta section" id="cta_${idx}">
+        <div class="container scroll-animate">
+          <div class="cta-price">${p.ctaPrice||'立即拥有'}</div>
+          <div class="cta-price-sub">${p.ctaPriceSub||p.name}</div>
+          <h2 class="cta-title">${p.ctaTitle||'开启新体验'}</h2>
+          <p class="cta-desc">${p.ctaDesc||''}</p>
+          <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+            <a href="#" class="btn btn-primary">${p.ctaText||'立即购买'}</a>
+            <a href="#" class="btn btn-ghost">了解更多</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+// =====================================================
+// 渲染所有产品
+// =====================================================
+function renderAll() {
+  const slides = document.getElementById('productSlides');
+  const tabs = document.getElementById('productTabs');
+
+  // 渲染幻灯片
+  slides.innerHTML = products.map((p, i) => renderSlide(p, i)).join('');
+
+  // 渲染标签
+  tabs.innerHTML = products.map((p, i) => `
+    <div class="product-tab ${i === currentIdx ? 'active' : ''}" onclick="switchTo(${i})">
+      <span class="product-tab-icon-placeholder">${p.tabIcon || '📦'}</span>
+      <span>${p.name}</span>
+      ${p.badge ? `<span class="product-tab-badge">${p.badge}</span>` : ''}
+    </div>
+  `).join('');
+
+  // 设置轮播位置
+  updateCarouselPosition(false);
+
+  // 更新图片槽列表
+  renderImgSlotList();
+
+  // 更新产品管理列表
+  renderProductList();
+
+  // 更新图标面板
+  renderIconGrid();
+
+  // 更新文字编辑面板
+  renderTextEditFields();
+
+  // 绑定滚动动画
+  bindScrollAnimate();
+
+  // 更新导航品牌
+  document.getElementById('navBrand').textContent = products[currentIdx]?.name || '产品展示';
+}
+
+// =====================================================
+// 产品切换
+// =====================================================
+function switchTo(idx, animate = true) {
+  if (idx < 0 || idx >= products.length) return;
+  currentIdx = idx;
+
+  // 更新标签高亮
+  document.querySelectorAll('.product-tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+
+  // 切换幻灯片
+  updateCarouselPosition(animate);
+
+  // 导航品牌
+  document.getElementById('navBrand').textContent = products[idx]?.name || '产品展示';
+
+  // 更新控制面板
+  renderImgSlotList();
+  renderIconGrid();
+  renderTextEditFields();
+
+  // 滚动到顶部
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateCarouselPosition(animate = true) {
+  const slides = document.getElementById('productSlides');
+  if (carouselMode === 'fade') {
+    // 淡入淡出：先全部隐藏，再显示当前
+    slides.querySelectorAll('.product-slide').forEach((s, i) => {
+      s.style.transition = 'opacity 0.5s ease';
+      s.style.opacity = i === currentIdx ? '1' : '0';
+      s.style.pointerEvents = i === currentIdx ? '' : 'none';
+    });
+    slides.style.transform = `translateX(-${currentIdx * 100}%)`;
+  } else if (carouselMode === 'zoom') {
+    slides.querySelectorAll('.product-slide').forEach((s, i) => {
+      s.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+      s.style.opacity = i === currentIdx ? '1' : '0';
+      s.style.transform = i === currentIdx ? 'scale(1)' : 'scale(0.96)';
+      s.style.pointerEvents = i === currentIdx ? '' : 'none';
+    });
+    slides.style.transform = `translateX(-${currentIdx * 100}%)`;
+  } else {
+    // slide（默认）
+    slides.querySelectorAll('.product-slide').forEach(s => {
+      s.style.transition = '';
+      s.style.opacity = '';
+      s.style.transform = '';
+      s.style.pointerEvents = '';
+    });
+    slides.style.transition = animate ? `transform var(--carousel-duration) var(--anim-easing)` : 'none';
+    slides.style.transform = `translateX(-${currentIdx * 100}%)`;
+  }
+
+  // 重新触发滚动动画
+  setTimeout(bindScrollAnimate, 300);
+}
+
+// =====================================================
+// 图片槽渲染（控制面板）
+// =====================================================
+function renderImgSlotList() {
+  const p = products[currentIdx];
+  if (!p) return;
+  const container = document.getElementById('imgSlotList');
+  const slots = [
+    { key: `product_${p.id}_hero`, label: '首屏主图', current: p.heroImg },
+    ...(p.showcaseItems||[]).map((s,i) => ({ key: `product_${p.id}_showcase_${i}`, label: `细节图 ${i+1}`, current: s.img })),
+    { key: `product_${p.id}_scenario`, label: '场景大图', current: p.scenarioImg },
+  ];
+  container.innerHTML = slots.map(slot => {
+    const src = imageRegistry[slot.key] || slot.current || '';
+    const thumb = src ? `<img class="img-slot-thumb" src="${src}" onerror="this.style.background='#1A1A25'">` : `<div class="img-slot-thumb" style="background:#1A1A25;"></div>`;
+    return `
+      <div class="img-slot-item">
+        ${thumb}
+        <span class="img-slot-name">${slot.label}</span>
+        <button class="img-slot-change">
+          换图<input type="file" accept="image/*" onchange="handleImgSlotUpload(event,'${slot.key}')">
+        </button>
+      </div>`;
+  }).join('');
+}
+
+function handleImgSlotUpload(e, key) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  imageRegistry[key] = url;
+  renderAll();
+  showToast('✅ 图片已替换');
+}
+
+// =====================================================
+// 图标面板
+// =====================================================
+function renderIconGrid() {
+  const p = products[currentIdx];
+  if (!p) return;
+  const grid = document.getElementById('iconGrid');
+  grid.innerHTML = ICON_PRESETS.map((icon, i) => `
+    <div class="icon-option" title="${icon}" onclick="selectPresetIcon(${i},'${icon}')">${icon}</div>
+  `).join('') + `<div class="icon-option custom-icon" title="上传图标" onclick="document.getElementById('iconFileUpload').click()">📁上传</div>`;
+
+  // 隐藏文件上传
+  if (!document.getElementById('iconFileUpload')) {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.id = 'iconFileUpload';
+    inp.style.display = 'none';
+    inp.onchange = handleIconUpload;
+    document.body.appendChild(inp);
+  }
+}
+
+function selectPresetIcon(i, icon) {
+  const slot = parseInt(document.getElementById('iconSlot').value) || 0;
+  const p = products[currentIdx];
+  if (!p) return;
+  const key = `product_${p.id}_icon_${slot}`;
+  // 清除可能的图片注册，直接用emoji
+  delete imageRegistry[key];
+  if (p.features && p.features[slot]) {
+    p.features[slot].icon = icon;
+  }
+  renderAll();
+  showToast(`✅ 图标 ${slot+1} 已更换为 ${icon}`);
+}
+
+function applyCustomIcon() {
+  const slot = parseInt(document.getElementById('iconSlot').value) || 0;
+  const val = document.getElementById('customIconInput').value.trim();
+  if (!val) { showToast('请输入emoji或已上传图标'); return; }
+  const p = products[currentIdx];
+  if (p && p.features && p.features[slot]) {
+    p.features[slot].icon = val;
+    renderAll();
+    showToast(`✅ 图标 ${slot+1} 已自定义`);
+  }
+}
+
+function handleIconUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const slot = parseInt(document.getElementById('iconSlot').value) || 0;
+  const p = products[currentIdx];
+  if (!p) return;
+  const key = `product_${p.id}_icon_${slot}`;
+  imageRegistry[key] = url;
+  if (p.features && p.features[slot]) {
+    p.features[slot].icon = url;
+  }
+  renderAll();
+  showToast(`✅ 图标 ${slot+1} 已替换`);
+}
+
+// =====================================================
+// 动效设置
+// =====================================================
+document.getElementById('carouselSpeed').addEventListener('input', function() {
+  document.getElementById('carouselSpeedVal').textContent = (this.value/1000).toFixed(1) + 's';
+});
+document.getElementById('animDuration').addEventListener('input', function() {
+  document.getElementById('animDurationVal').textContent = (this.value/1000).toFixed(1) + 's';
+});
+
+function applyAnimSettings() {
+  const speed = document.getElementById('carouselSpeed').value;
+  const dur = document.getElementById('animDuration').value;
+  const easing = document.getElementById('animEasing').value;
+  const animType = document.getElementById('animType').value;
+  const autoPlayVal = document.getElementById('autoPlay').value;
+  carouselMode = document.getElementById('carouselMode').value;
+
+  document.documentElement.style.setProperty('--carousel-duration', (speed/1000)+'s');
+  document.documentElement.style.setProperty('--anim-duration', (dur/1000)+'s');
+  document.documentElement.style.setProperty('--anim-easing', easing);
+
+  // 更新所有 scroll-animate 的 data-anim
+  if (animType) {
+    document.querySelectorAll('.scroll-animate').forEach(el => el.dataset.anim = animType);
+  }
+
+  // 自动播放
+  clearInterval(autoPlayTimer);
+  if (parseInt(autoPlayVal) > 0) {
+    autoPlayTimer = setInterval(() => {
+      switchTo((currentIdx + 1) % products.length);
+    }, parseInt(autoPlayVal));
+  }
+
+  updateCarouselPosition(false);
+  showToast('✅ 动效设置已应用');
+}
+
+// =====================================================
+// 色彩主题
+// =====================================================
+document.querySelectorAll('.color-swatch').forEach(sw => {
+  sw.addEventListener('click', function() {
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    this.classList.add('active');
+    const sec = this.dataset.secondary, acc = this.dataset.accent;
+    document.getElementById('colorSecondary').value = sec;
+    document.getElementById('colorSecondaryHex').value = sec;
+    document.getElementById('colorAccent').value = acc;
+    document.getElementById('colorAccentHex').value = acc;
+  });
+});
+document.getElementById('colorSecondary').addEventListener('input', function() {
+  document.getElementById('colorSecondaryHex').value = this.value;
+});
+document.getElementById('colorAccent').addEventListener('input', function() {
+  document.getElementById('colorAccentHex').value = this.value;
+});
+
+function applyColors() {
+  let sec = document.getElementById('colorSecondaryHex').value.trim() || document.getElementById('colorSecondary').value;
+  let acc = document.getElementById('colorAccentHex').value.trim() || document.getElementById('colorAccent').value;
+  if (!sec.startsWith('#')) sec = '#' + sec;
+  if (!acc.startsWith('#')) acc = '#' + acc;
+  document.documentElement.style.setProperty('--color-secondary', sec);
+  document.documentElement.style.setProperty('--color-accent', acc);
+  document.getElementById('colorSecondary').value = sec;
+  document.getElementById('colorAccent').value = acc;
+  showToast('🎨 色彩主题已更新');
+}
+
+// =====================================================
+// 背景控制
+// =====================================================
+const BG_PRESETS = {
+  dark: { bg: '#0A0A0F', card: '#1A1A25', bg2: '#111118', border: '#2A2A3A' },
+  navy: { bg: '#05101F', card: '#0D1F35', bg2: '#081628', border: '#1E3354' },
+  gradient: { bg: '#0D0D1A', card: '#1A1A2E', bg2: '#16213E', border: '#2A2A50' },
+  glass: { bg: '#0E0E14', card: 'rgba(255,255,255,0.06)', bg2: '#111118', border: 'rgba(255,255,255,0.1)' },
+};
+
+function updateBgPreview() {
+  const type = document.getElementById('bgType').value;
+  const preview = document.getElementById('bgPreview');
+  const customRow = document.getElementById('bgCustomColorRow');
+  const imgZone = document.getElementById('bgImgZone');
+  customRow.style.display = type === 'custom' ? 'flex' : 'none';
+  imgZone.style.display = type === 'image' ? 'block' : 'none';
+
+  if (BG_PRESETS[type]) {
+    preview.style.background = BG_PRESETS[type].bg;
+    preview.style.backgroundImage = type === 'gradient' ? `linear-gradient(135deg, ${BG_PRESETS[type].bg}, ${BG_PRESETS[type].bg2})` : '';
+  } else if (type === 'custom') {
+    const c = document.getElementById('bgCustomColor').value;
+    preview.style.background = c;
+  } else {
+    preview.style.background = '#0A0A0F';
+  }
+}
+
+function applyBackground() {
+  const type = document.getElementById('bgType').value;
+  if (BG_PRESETS[type]) {
+    const p = BG_PRESETS[type];
+    document.documentElement.style.setProperty('--color-primary', p.bg);
+    document.documentElement.style.setProperty('--color-bg', p.bg2);
+    document.documentElement.style.setProperty('--color-card', p.card);
+    document.documentElement.style.setProperty('--color-border', p.border);
+    document.body.style.background = '';
+    document.body.style.backgroundImage = '';
+  } else if (type === 'custom') {
+    const c = document.getElementById('bgCustomColor').value;
+    document.documentElement.style.setProperty('--color-primary', c);
+    document.documentElement.style.setProperty('--color-bg', c);
+  } else if (type === 'image') {
+    // 背景图由 handleBgUpload 处理
+  }
+  showToast('🌌 背景已更新');
+}
+
+let _bgImageUrl = null;
+function handleBgUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  _bgImageUrl = URL.createObjectURL(file);
+  document.getElementById('bgPreview').style.backgroundImage = `url(${_bgImageUrl})`;
+  document.getElementById('bgPreview').style.backgroundSize = 'cover';
+  document.getElementById('bgPreview').style.backgroundPosition = 'center';
+}
+function applyBgImage() {
+  if (_bgImageUrl) {
+    document.body.style.backgroundImage = `url(${_bgImageUrl})`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundAttachment = 'fixed';
+    showToast('🖼 背景图片已应用');
+  }
+}
+
+// =====================================================
+// 产品管理（控制面板）
+// =====================================================
+function renderProductList() {
+  const container = document.getElementById('productList');
+  container.innerHTML = products.map((p, i) => `
+    <div class="product-list-item ${i === currentIdx ? 'active' : ''}" onclick="switchTo(${i})">
+      <span style="font-size:16px">${p.tabIcon || '📦'}</span>
+      <span class="product-list-item-name">${p.name}</span>
+      <div class="product-list-item-actions">
+        <button class="pli-btn" title="编辑" onclick="editProductName(event,${i})">✏️</button>
+        ${products.length > 1 ? `<button class="pli-btn" title="删除" onclick="removeProduct(event,${i})">🗑</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function addProduct() {
+  const name = prompt('输入新产品名称：', '新产品 ' + (products.length + 1));
+  if (!name) return;
+  const newP = JSON.parse(JSON.stringify(defaultProducts[0]));
+  newP.id = Date.now();
+  newP.name = name;
+  newP.badge = '新品';
+  newP.tabIcon = '📦';
+  newP.title = name.split(' ')[0] || name;
+  newP.titleHighlight = name.split(' ').slice(1).join(' ') || 'Pro';
+  products.push(newP);
+  currentIdx = products.length - 1;
+  renderAll();
+  showToast('✅ 新产品已添加');
+}
+
+function editProductName(e, i) {
+  e.stopPropagation();
+  const name = prompt('修改产品名称：', products[i].name);
+  if (!name) return;
+  products[i].name = name;
+  renderAll();
+  showToast('✅ 产品名称已修改');
+}
+
+function removeProduct(e, i) {
+  e.stopPropagation();
+  if (!confirm(`确认删除产品「${products[i].name}」？`)) return;
+  products.splice(i, 1);
+  if (currentIdx >= products.length) currentIdx = products.length - 1;
+  renderAll();
+  showToast('🗑 产品已删除');
+}
+
+// =====================================================
+// 控制面板开关
+// =====================================================
+function togglePanel() {
+  document.getElementById('ctrlPanel').classList.toggle('collapsed');
+}
+document.getElementById('ctrlToggle').addEventListener('click', togglePanel);
+
+// =====================================================
+// 重置
+// =====================================================
+function resetAll() {
+  if (!confirm('确认重置所有设置（色彩、背景、动效），图片替换不会撤销？')) return;
+  const root = document.documentElement;
+  root.style.removeProperty('--color-secondary');
+  root.style.removeProperty('--color-accent');
+  root.style.removeProperty('--color-primary');
+  root.style.removeProperty('--color-bg');
+  root.style.removeProperty('--color-card');
+  root.style.removeProperty('--color-border');
+  root.style.removeProperty('--carousel-duration');
+  root.style.removeProperty('--anim-duration');
+  root.style.removeProperty('--anim-easing');
+  document.body.style.backgroundImage = '';
+  clearInterval(autoPlayTimer);
+  carouselMode = 'slide';
+  showToast('↺ 已重置所有样式设置');
+}
+
+// =====================================================
+// 滚动动画
+// =====================================================
+function bindScrollAnimate() {
+  const els = document.querySelectorAll('.scroll-animate:not(.visible)');
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          obs.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.10, rootMargin: '0px 0px -30px 0px' });
+    els.forEach(el => obs.observe(el));
+  } else {
+    els.forEach(el => el.classList.add('visible'));
+  }
+}
+
+// =====================================================
+// ✏️ 文字替换面板
+// =====================================================
+let _textEditBackup = null;
+
+function renderTextEditFields() {
+  const p = products[currentIdx];
+  if (!p) return;
+  const container = document.getElementById('textEditFields');
+  if (!container) return;
+
+  _textEditBackup = JSON.parse(JSON.stringify(p));
+
+  const make = (id, label, val, isTextarea) => `
+    <div class="text-edit-field">
+      <label class="text-edit-label">${label}</label>
+      ${isTextarea
+        ? `<textarea class="text-edit-input" id="te_${id}" rows="2">${escHtml(val||'')}</textarea>`
+        : `<input type="text" class="text-edit-input" id="te_${id}" value="${escAttr(val||'')}">`}
+    </div>`;
+
+  let html = '';
+
+  // 基本信息
+  html += `<div class="text-edit-group-title">📌 基本信息</div>`;
+  html += make('tag', '标签（顶部小标）', p.tag);
+  html += make('title', '标题（主）', p.title);
+  html += make('titleHighlight', '标题（高亮）', p.titleHighlight);
+  html += make('desc', '副标题描述', p.desc, true);
+  html += make('badge', '产品徽章（推荐/新品等）', p.badge);
+
+  // 关键数字
+  if (p.stats && p.stats.length) {
+    html += `<div class="text-edit-group-title">📊 关键数字</div>`;
+    p.stats.forEach((s, i) => {
+      html += make(`stat_num_${i}`, `数字 ${i+1}`, s.num);
+      html += make(`stat_label_${i}`, `说明 ${i+1}`, s.label);
+    });
+  }
+
+  // 卖点
+  if (p.features && p.features.length) {
+    html += `<div class="text-edit-group-title">⭐ 核心卖点</div>`;
+    p.features.forEach((f, i) => {
+      html += make(`feat_title_${i}`, `卖点${i+1} 标题`, f.title);
+      html += make(`feat_desc_${i}`, `卖点${i+1} 描述`, f.desc, true);
+    });
+  }
+
+  // 细节图
+  if (p.showcaseItems && p.showcaseItems.length) {
+    html += `<div class="text-edit-group-title">🔍 产品细节</div>`;
+    p.showcaseItems.forEach((s, i) => {
+      html += make(`show_title_${i}`, `细节图${i+1} 标题`, s.title);
+      html += make(`show_desc_${i}`, `细节图${i+1} 描述`, s.desc);
+    });
+  }
+
+  // 场景
+  html += `<div class="text-edit-group-title">🌄 应用场景</div>`;
+  html += make('scenarioTitle', '场景标题', p.scenarioTitle);
+  html += make('scenarioDesc', '场景描述', p.scenarioDesc, true);
+
+  // CTA
+  html += `<div class="text-edit-group-title">🛒 CTA 区域</div>`;
+  html += make('ctaPrice', 'CTA 大字', p.ctaPrice);
+  html += make('ctaPriceSub', 'CTA 副标题', p.ctaPriceSub);
+  html += make('ctaTitle', 'CTA 标题', p.ctaTitle);
+  html += make('ctaDesc', 'CTA 描述', p.ctaDesc, true);
+  html += make('ctaText', 'CTA 按钮文字', p.ctaText);
+
+  // 规格
+  if (p.specs && p.specs.length) {
+    html += `<div class="text-edit-group-title">📋 规格参数</div>`;
+    p.specs.forEach((spec, i) => {
+      html += make(`spec_k_${i}`, `规格${i+1} 项目`, spec[0]);
+      html += make(`spec_v_${i}`, `规格${i+1} 值`, spec[1]);
+    });
+  }
+
+  container.innerHTML = html;
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+function getVal(id) {
+  const el = document.getElementById('te_' + id);
+  return el ? el.value : null;
+}
+
+function saveTextEdits() {
+  const p = products[currentIdx];
+  if (!p) return;
+
+  const v = (id) => { const val = getVal(id); return val !== null ? val : undefined; };
+
+  p.tag = v('tag') ?? p.tag;
+  p.title = v('title') ?? p.title;
+  p.titleHighlight = v('titleHighlight') ?? p.titleHighlight;
+  p.desc = v('desc') ?? p.desc;
+  p.badge = v('badge') ?? p.badge;
+
+  if (p.stats) p.stats.forEach((s, i) => {
+    if (v(`stat_num_${i}`) !== undefined) s.num = v(`stat_num_${i}`);
+    if (v(`stat_label_${i}`) !== undefined) s.label = v(`stat_label_${i}`);
+  });
+
+  if (p.features) p.features.forEach((f, i) => {
+    if (v(`feat_title_${i}`) !== undefined) f.title = v(`feat_title_${i}`);
+    if (v(`feat_desc_${i}`) !== undefined) f.desc = v(`feat_desc_${i}`);
+  });
+
+  if (p.showcaseItems) p.showcaseItems.forEach((s, i) => {
+    if (v(`show_title_${i}`) !== undefined) s.title = v(`show_title_${i}`);
+    if (v(`show_desc_${i}`) !== undefined) s.desc = v(`show_desc_${i}`);
+  });
+
+  p.scenarioTitle = v('scenarioTitle') ?? p.scenarioTitle;
+  p.scenarioDesc = v('scenarioDesc') ?? p.scenarioDesc;
+  p.ctaPrice = v('ctaPrice') ?? p.ctaPrice;
+  p.ctaPriceSub = v('ctaPriceSub') ?? p.ctaPriceSub;
+  p.ctaTitle = v('ctaTitle') ?? p.ctaTitle;
+  p.ctaDesc = v('ctaDesc') ?? p.ctaDesc;
+  p.ctaText = v('ctaText') ?? p.ctaText;
+
+  if (p.specs) p.specs.forEach((spec, i) => {
+    if (v(`spec_k_${i}`) !== undefined) spec[0] = v(`spec_k_${i}`);
+    if (v(`spec_v_${i}`) !== undefined) spec[1] = v(`spec_v_${i}`);
+  });
+
+  renderAll();
+  showToast('✅ 文案已保存并刷新');
+}
+
+function resetTextEdits() {
+  if (!_textEditBackup) return;
+  const idx = currentIdx;
+  products[idx] = JSON.parse(JSON.stringify(_textEditBackup));
+  renderAll();
+  showToast('↺ 文案已重置');
+}
+
+function downloadEditedHtml() {
+  const src = document.documentElement.outerHTML;
+  const blob = new Blob([src], { type: 'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'product-detail-edited.html';
+  a.click();
+  showToast('⬇ 已下载修改后的 HTML');
+}
+
+// =====================================================
+// 📄 PDF 导出
+// =====================================================
+function exportPDF() {
+  showToast('📄 正在准备打印预览，请在对话框中选择"另存为PDF"...');
+  setTimeout(() => window.print(), 400);
+}
+
+// =====================================================
+// 🖼 JPG 导出（html2canvas）
+// =====================================================
+function exportJPG() {
+  showToast('🖼 正在加载截图工具，请稍候...');
+  // 动态加载 html2canvas
+  if (window.html2canvas) {
+    _doExportJPG();
+    return;
+  }
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+  s.onload = _doExportJPG;
+  s.onerror = () => showToast('❌ 截图库加载失败，请检查网络');
+  document.head.appendChild(s);
+}
+
+function _doExportJPG() {
+  showToast('🖼 截图中，请勿操作...');
+  const target = document.getElementById('productCarousel') || document.body;
+  window.html2canvas(target, {
+    scale: window.devicePixelRatio || 2,
+    useCORS: true,
+    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--color-primary') || '#0A0A0F',
+    logging: false,
+    windowWidth: document.documentElement.scrollWidth,
+    windowHeight: document.documentElement.scrollHeight,
+  }).then(function(canvas) {
+    const a = document.createElement('a');
+    const pName = (products[currentIdx]?.name || 'product').replace(/[^\w\u4e00-\u9fa5]/g, '-');
+    a.download = `product-detail-${pName}.jpg`;
+    a.href = canvas.toDataURL('image/jpeg', 0.92);
+    a.click();
+    showToast('✅ JPG 已下载');
+  }).catch(function(err) {
+    console.error(err);
+    showToast('❌ 截图失败：' + err.message);
+  });
+}
+
+// =====================================================
+// 📦 PSD 图层说明书 + Python 脚本
+// =====================================================
+function showPSDGuide() {
+  const p = products[currentIdx];
+  if (!p) return;
+
+  const W = 1200, H_est = 4000;
+
+  // 生成图层规格说明
+  let spec = `## PSD 图层规格说明 — ${p.name}\n\n`;
+  spec += `**画布尺寸**：${W}px × ${H_est}px（估算，以实际渲染为准）\n\n`;
+  spec += `---\n\n### 文字图层\n\n`;
+  spec += `| 层名 | 内容 | 字号 | 字重 | 颜色 | 参考位置 |\n`;
+  spec += `|------|------|------|------|------|----------|\n`;
+  spec += `| tag | ${p.tag||''} | 13px | 500 | #00D9FF | top:120, left:100 |\n`;
+  spec += `| title | ${p.title||''} | 60px | 800 | #E2E8F0 | top:170, left:100 |\n`;
+  spec += `| titleHighlight | ${p.titleHighlight||''} | 60px | 800 | gradient(#00D9FF,#7000FF) | top:240, left:100 |\n`;
+  spec += `| desc | ${(p.desc||'').substring(0,30)}... | 17px | 400 | #8892A4 | top:340, left:100 |\n`;
+  if (p.features) p.features.forEach((f,i) => {
+    spec += `| feat_title_${i} | ${f.title} | 18px | 700 | #E2E8F0 | feat-card-${i} |\n`;
+    spec += `| feat_desc_${i} | ${(f.desc||'').substring(0,20)}... | 13px | 400 | #8892A4 | feat-card-${i} |\n`;
+  });
+  spec += `| scenarioTitle | ${p.scenarioTitle||''} | 26px | 700 | #E2E8F0 | scene-section |\n`;
+  spec += `| ctaPrice | ${p.ctaPrice||''} | 48px | 800 | gradient | cta-section |\n\n`;
+
+  spec += `### 图片图层\n\n`;
+  spec += `| 层名 | 来源路径 | 尺寸 | 参考位置 |\n`;
+  spec += `|------|---------|------|----------|\n`;
+  spec += `| heroImg | ${p.heroImg||'(未设置)'} | 480×400px | right:0, top:80 |\n`;
+  if (p.showcaseItems) p.showcaseItems.forEach((s,i) => {
+    spec += `| showcase_${i} | ${s.img||'(未设置)'} | 360×240px | showcase-grid-${i} |\n`;
+  });
+  spec += `| scenarioImg | ${p.scenarioImg||'(未设置)'} | 1200×450px | full-width |\n\n`;
+
+  spec += `### 背景图层\n\n`;
+  spec += `| 层名 | 类型 | 参数 |\n`;
+  spec += `|------|------|------|\n`;
+  spec += `| bg_body | 纯色 | #111118 |\n`;
+  spec += `| bg_hero_glow1 | 径向渐变 | ${p.themeGlow1||'rgba(112,0,255,0.15)'}, center-right |\n`;
+  spec += `| bg_hero_glow2 | 径向渐变 | ${p.themeGlow2||'rgba(0,217,255,0.1)'}, center-left |\n\n`;
+
+  // 生成 Python 脚本
+  const pyScript = `#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+PSD 生成脚本 - ${p.name}
+依赖：pip install psd-tools Pillow
+运行：python generate_psd.py
+"""
+from PIL import Image, ImageDraw, ImageFont
+import os
+
+# ===== 配置 =====
+CANVAS_W = 1200
+CANVAS_H = 4000
+BG_COLOR = (17, 17, 24)  # #111118
+
+# ===== 创建画布 =====
+img = Image.new('RGBA', (CANVAS_W, CANVAS_H), BG_COLOR + (255,))
+draw = ImageDraw.Draw(img)
+
+# ===== 背景光晕（Hero区） =====
+from PIL import ImageFilter
+glow1 = Image.new('RGBA', (CANVAS_W, CANVAS_H), (0,0,0,0))
+gd1 = ImageDraw.Draw(glow1)
+gd1.ellipse([600, 0, 1400, 700], fill=(112, 0, 255, 38))
+glow1 = glow1.filter(ImageFilter.GaussianBlur(radius=120))
+img = Image.alpha_composite(img, glow1)
+
+# ===== 首屏文字 =====
+try:
+    font_h1 = ImageFont.truetype("arial.ttf", 60)
+    font_sub = ImageFont.truetype("arial.ttf", 17)
+    font_tag = ImageFont.truetype("arial.ttf", 13)
+except:
+    font_h1 = ImageFont.load_default()
+    font_sub = font_h1
+    font_tag = font_h1
+
+draw2 = ImageDraw.Draw(img)
+draw2.text((100, 170), "${p.title||''}", fill=(226,232,240,255), font=font_h1)
+draw2.text((100, 240), "${p.titleHighlight||''}", fill=(0,217,255,255), font=font_h1)
+draw2.text((100, 340), """${(p.desc||'').replace(/"/g,'\\"').substring(0,50)}""", fill=(136,146,164,255), font=font_sub)
+
+# ===== 首屏产品图 =====
+hero_path = r"${(p.heroImg||'').replace(/\\/g,'\\\\')}"
+if os.path.exists(hero_path):
+    hero = Image.open(hero_path).convert("RGBA").resize((480, 400))
+    img.paste(hero, (680, 80), hero)
+
+# ===== 保存为 PNG（psd-tools 生成 PSD 示例） =====
+out_path = "product-${(p.name||'output').replace(/[^\w]/g,'-')}.png"
+img.save(out_path, "PNG")
+print(f"✅ 已保存为 {out_path}（PNG预览版）")
+
+# ===== 如需生成真正的 PSD，使用 psd-tools =====
+# from psd_tools import PSDImage
+# from psd_tools.api.psd_image import PSDImage
+# psd = PSDImage.new('RGBA', (CANVAS_W, CANVAS_H))
+# # 添加图层... (psd-tools API)
+# psd.save("product-${(p.name||'output').replace(/[^\w]/g,'-')}.psd")
+`;
+
+  const content = document.getElementById('psdModalContent');
+  content.innerHTML = `
+    <p>以下是当前产品「<strong>${p.name}</strong>」的 PSD 图层规格说明书和 Python 生成脚本：</p>
+    <div style="margin:10px 0;font-size:0.75rem;color:#a78bfa;">
+      📦 安装依赖：<code style="background:#0A0A0F;padding:2px 6px;border-radius:3px;">pip install psd-tools Pillow</code>
+      &nbsp;→&nbsp; 运行：<code style="background:#0A0A0F;padding:2px 6px;border-radius:3px;">python generate_psd.py</code>
+    </div>
+    <pre id="psdSpecText">${escHtml(spec)}</pre>
+    <div style="margin-top:8px;font-size:0.8rem;color:var(--color-secondary);">Python 脚本（generate_psd.py）：</div>
+    <pre id="psdPyText">${escHtml(pyScript)}</pre>
+  `;
+
+  window._psdFullContent = spec + '\n\n---\n\n' + pyScript;
+  document.getElementById('psdModal').classList.add('show');
+}
+
+function copyPsdContent() {
+  if (navigator.clipboard && window._psdFullContent) {
+    navigator.clipboard.writeText(window._psdFullContent).then(() => showToast('📋 已复制到剪贴板'));
+  } else {
+    showToast('❌ 复制失败，请手动选中文本复制');
+  }
+}
+
+// =====================================================
+// 初始化
+// =====================================================
+renderAll();
+// 初始折叠控制面板（PC）
+setTimeout(() => {
+  if (window.innerWidth >= 1024) {
+    document.getElementById('ctrlPanel').classList.remove('collapsed');
+  }
+}, 300);
+</script>
+</body>
+</html>

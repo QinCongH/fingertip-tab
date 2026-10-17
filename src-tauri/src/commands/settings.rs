@@ -184,6 +184,16 @@ pub struct AppSettings {
 // 曲谱库路径管理
 // ---------------------------------------------------------------------------
 
+/// 目标目录探测结果，供前端判断是「加载已有工作区」还是「初始化新工作区」
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryProbe {
+    pub exists: bool,
+    pub empty: bool,
+    pub has_db: bool,
+    pub has_resources: bool,
+}
+
 /// 默认曲谱库目录：用户文档目录/FingertipTabs
 pub fn default_library_path() -> Result<PathBuf> {
     let docs = dirs::document_dir()
@@ -207,6 +217,12 @@ pub async fn get_library_path(app: &AppHandle) -> Result<PathBuf> {
 /// 初始化曲谱库目录结构、settings.json 与数据库连接（应用启动时调用）
 pub async fn ensure_library_ready(app: &AppHandle) -> Result<SqlitePool> {
     let lib = get_library_path(app).await?;
+    ensure_library_ready_at(app, lib).await
+}
+
+/// 在指定目录初始化曲谱库结构（切换工作区时复用；对已有库为幂等操作）
+/// `app` 保留用于后续按库加载扩展设置项，当前初始化过程无需访问全局状态
+pub async fn ensure_library_ready_at(_app: &AppHandle, lib: PathBuf) -> Result<SqlitePool> {
     file::ensure_dir(&lib.join("Resources/Images")).await?;
     file::ensure_dir(&lib.join("Resources/Thumbnails")).await?;
     file::ensure_dir(&lib.join("Resources/GPFiles")).await?;
@@ -273,53 +289,78 @@ pub async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<()> 
     Ok(())
 }
 
-/// 修改存储路径：移动 Resources 与数据库文件到新目录（建议迁移后重启应用）
+/// 探测指定目录是否为可用的曲谱库（以数据库文件为准）
+pub async fn probe_library(path: &Path) -> LibraryProbe {
+    let db_path = path.join("FingertipTabs.db");
+    let has_db = tokio::fs::try_exists(&db_path).await.unwrap_or(false);
+
+    // 目录不存在或为空 → 可直接初始化为新工作区
+    let empty = match tokio::fs::read_dir(path).await {
+        Ok(mut entries) => entries.next_entry().await.map(|_| false).unwrap_or(true),
+        Err(_) => true,
+    };
+
+    LibraryProbe {
+        exists: tokio::fs::try_exists(path).await.unwrap_or(false),
+        empty,
+        has_db,
+        has_resources: tokio::fs::try_exists(path.join("Resources")).await.unwrap_or(false),
+    }
+}
+
+/// 选定文件夹作为工作区：符合曲谱库结构则直接加载，否则初始化为新工作区。
+/// 与旧的「迁移」语义不同——本操作不移动任何文件，原库数据原地保留。
 #[tauri::command]
-pub async fn migrate_library(
+pub async fn switch_library(
     app: AppHandle,
     state: tauri::State<'_, crate::db::connection::AppState>,
     new_path: String,
+    init_if_missing: bool,
 ) -> Result<()> {
     let old = get_library_path(&app).await?;
     let new_path = PathBuf::from(new_path.trim());
-    if new_path == old {
-        return Err(AppError::msg("新路径与当前路径相同"));
-    }
     if new_path.as_os_str().is_empty() {
         return Err(AppError::msg("路径不能为空"));
     }
-    tokio::fs::create_dir_all(&new_path).await?;
-    // 目标目录必须为空，避免覆盖已有数据
-    let mut entries = tokio::fs::read_dir(&new_path).await?;
-    if entries.next_entry().await?.is_some() {
-        return Err(AppError::msg("目标目录不为空，为避免数据覆盖请选择空目录"));
+    if new_path == old {
+        return Err(AppError::msg("新路径与当前路径相同"));
     }
 
-    // 关闭数据库连接池，保证 Windows 下文件可移动
+    // 校验目标目录：非空且不含数据库文件时，需前端确认后才能初始化
+    let probe = probe_library(&new_path).await;
+    if !probe.has_db && !probe.empty && !init_if_missing {
+        return Err(AppError::msg("DIR_NOT_EMPTY"));
+    }
+
+    // 关闭当前连接池（Windows 下文件被占用会导致后续操作失败）
     state.pool.close().await;
-    let lib = old;
-    for name in ["FingertipTabs.db", "settings.json"] {
-        let src = lib.join(name);
-        if tokio::fs::try_exists(&src).await.unwrap_or(false) {
-            file::move_path(&src, &new_path.join(name))?;
-        }
-    }
-    let resources = lib.join("Resources");
-    if tokio::fs::try_exists(&resources).await.unwrap_or(false) {
-        file::move_path(&resources, &new_path.join("Resources"))?;
-    }
 
-    // 更新指针配置与 settings.json 中的路径记录
+    // 初始化目录结构 + settings.json + 数据库；已是曲谱库时此过程幂等
+    let pool = ensure_library_ready_at(&app, new_path.clone()).await?;
+
+    // 同步共享上下文（内部 HTTP 服务也持有连接池）
+    let pool_for_share = pool.clone();
+    let app_for_share = app.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::commands::share::register_context(pool_for_share, app_for_share);
+    });
+
+    // 更新应用级指针配置，供下次启动读取
     let mut cfg = read_app_config(&app).await?;
     cfg.library_path = Some(new_path.to_string_lossy().into_owned());
     write_app_config(&app, &cfg).await?;
 
-    let settings_path = new_path.join("settings.json");
-    let mut settings = load_settings_file(&settings_path).await.unwrap_or_default();
-    settings.general.library_path = new_path.to_string_lossy().into_owned();
-    save_settings_file(&settings_path, &settings).await?;
-
     Ok(())
+}
+
+/// 探测目录是否已是曲谱库，供前端在确认前展示差异化提示
+#[tauri::command]
+pub async fn probe_library_path(path: String) -> Result<LibraryProbe> {
+    let p = PathBuf::from(path.trim());
+    if p.as_os_str().is_empty() {
+        return Err(AppError::msg("路径不能为空"));
+    }
+    Ok(probe_library(&p).await)
 }
 
 /// 一键备份：将整个曲谱库打包为 ZIP

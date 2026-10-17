@@ -80,7 +80,7 @@ pub async fn apply_window_state(app: AppHandle, state: WindowState) -> Result<()
     Ok(())
 }
 
-/// 重启应用（存储迁移/恢复备份后使用）
+/// 重启应用（切换工作区/恢复备份后使用）
 #[tauri::command]
 pub fn restart_app(app: AppHandle) {
     app.restart();

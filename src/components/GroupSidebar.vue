@@ -124,13 +124,9 @@ const emit = defineEmits<{ (e: "update:modelValue", v: ActiveValue): void }>();
 const library = useLibraryStore();
 const toast = useToastStore();
 
-const uncategorizedCount = computed(
-  () => library.songs.filter((s) => s.collectionIds.length === 0).length,
-);
-
 const fixedItems = computed(() => [
-  { value: "all" as const, icon: "mdi-library-music", label: t("library.title"), count: library.songs.length },
-  { value: "uncategorized" as const, icon: "mdi-tag-outline", label: t("library.uncategorized"), count: uncategorizedCount.value },
+  { value: "all" as const, icon: "mdi-library-music", label: t("library.title"), count: library.allCount },
+  { value: "uncategorized" as const, icon: "mdi-tag-outline", label: t("library.uncategorized"), count: library.uncategorizedCount },
 ]);
 
 function select(v: ActiveValue) {

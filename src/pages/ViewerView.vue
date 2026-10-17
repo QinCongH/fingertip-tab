@@ -229,26 +229,15 @@
         />
       </div>
 
-      <!-- 模式 3：双页水平对齐 -->
+      <!-- 模式 3：多页横向对齐（自适应满高居中横向排布） -->
       <div v-else ref="dualEl" class="mode-dual" @wheel.prevent="onDualWheel" @scroll="onScroll">
-        <div v-for="(pair, pi) in pagePairs" :key="pi" class="dual-pair">
-          <div class="dual-item">
-            <img
-              v-if="pair[0]"
-              :src="pageSrcOf(pair[0])"
-              class="dual-img"
-              draggable="false"
-            />
-          </div>
-          <div class="dual-item">
-            <img
-              v-if="pair[1]"
-              :src="pageSrcOf(pair[1])"
-              class="dual-img"
-              draggable="false"
-            />
-            <div v-else class="dual-filler"></div>
-          </div>
+        <div v-for="(p, pi) in pages" :key="p.uuid" class="dual-item">
+          <img
+            :src="pageSrcOf(p)"
+            class="dual-img"
+            :alt="'page ' + (pi + 1)"
+            draggable="false"
+          />
         </div>
       </div>
       </template>
@@ -284,7 +273,7 @@
           />
         </template>
 
-        <!-- 自动滚动（滚动/双页模式） -->
+        <!-- 自动滚动（滚动/多页模式） -->
         <template v-else>
           <v-btn
             :icon="playing ? 'mdi-pause' : 'mdi-play'"
@@ -294,7 +283,7 @@
             @click="togglePlay"
           />
           <template v-if="speedMode === 'px'">
-            <span class="st-mono" style="width: 80px">{{ t("viewer.speed") }}</span>
+            <span class="st-mono" style="width: 50px">{{ t("viewer.speed") }}</span>
             <v-slider
               v-model="speedPx"
               :min="1"
@@ -302,13 +291,25 @@
               :step="0.5"
               hide-details
               density="compact"
-              max-width="260"
+              max-width="200"
               thumb-color="primary"
               @update:model-value="onSpeedChange"
             >
               <template #thumb-label="{ modelValue }">{{ modelValue }} {{ t("viewer.speed_unit") }}</template>
             </v-slider>
-            <span class="st-mono text-caption" style="min-width: 48px">{{ speedPx }} px/s</span>
+            <v-text-field
+              v-model.number="speedPx"
+              type="number"
+              :min="1"
+              :max="300"
+              :step="0.5"
+              suffix="px/s"
+              density="compact"
+              variant="underlined"
+              hide-details
+              max-width="110"
+              @update:model-value="onSpeedChange"
+            />
           </template>
           <template v-else>
             <v-text-field
@@ -450,7 +451,9 @@ watch(shareOpen, (open) => {
 
 
 const mode = ref<"fixed" | "scroll" | "dual_horizontal">(
-  (settings.settings.appearance.default_view_mode as "fixed" | "scroll" | "dual_horizontal") || "fixed",
+  (["fixed", "scroll", "dual_horizontal"].includes(settings.settings.appearance.default_view_mode)
+    ? settings.settings.appearance.default_view_mode
+    : "dual_horizontal") as "fixed" | "scroll" | "dual_horizontal",
 );
 const zoomMode = ref(settings.settings.appearance.zoom_mode || "fit_height");
 const fixedSheetWidth = ref<number>(0); // 0 为按 zoomMode 自适应；>0 为手动拖拽设定的像素宽度
@@ -563,15 +566,6 @@ const scrollImgStyle = computed(() => {
     default:
       return { width: "100%", height: "auto", maxWidth: "none" };
   }
-});
-
-// 双页两两一组（严格按图片顺序：1&2、3&4…），单张尾页居中
-const pagePairs = computed<PageDto[][]>(() => {
-  const out: PageDto[][] = [];
-  for (let i = 0; i < pages.value.length; i += 2) {
-    out.push(pages.value.slice(i, i + 2));
-  }
-  return out;
 });
 
 // ---------------------------------------------------------------------------
@@ -1022,51 +1016,54 @@ function goBack() {
 }
 .mode-scroll {
   height: 100%;
+  width: 100%;
   overflow: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   gap: 0;
+  box-sizing: border-box;
 }
 .mode-scroll .page-img {
   flex-shrink: 0;
   display: block;
+  margin: 0 auto;
 }
 .mode-dual {
   height: 100%;
+  width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   display: flex;
   flex-direction: row;
-}
-.dual-pair {
-  display: flex;
-  flex-shrink: 0;
-  width: 100vw;
-  height: 100%;
+  flex-wrap: nowrap;
+  justify-content: safe center;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
   box-sizing: border-box;
-  padding: 0 10px;
-  gap: 10px;
 }
 .dual-item {
-  flex: 1 1 0;
-  width: calc(50% - 5px);
   height: 100%;
+  max-height: 100%;
+  width: auto;
+  max-width: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  flex: 0 0 auto;
+  position: relative;
 }
 .dual-img {
-  width: 100%;
   height: 100%;
+  max-height: 100%;
+  width: auto;
+  max-width: none;
   object-fit: contain;
   display: block;
-}
-.dual-filler {
-  width: 100%;
-  height: 100%;
-  flex-shrink: 0;
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 .not-found {
   height: 100%;

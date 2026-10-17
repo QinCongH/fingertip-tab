@@ -253,6 +253,98 @@ pub async fn read_image_base64(path: String) -> Result<String> {
     ))
 }
 
+/// 分页查询曲谱列表（按分组过滤、按标题/艺术家/标签搜索）
+#[tauri::command]
+pub async fn get_songs_paged(
+    state: tauri::State<'_, AppState>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+    collection_id: Option<i64>,
+    uncategorized: Option<bool>,
+    search: Option<String>,
+) -> Result<crate::db::models::PagedSongsDto> {
+    let page_num = page.unwrap_or(1).max(1);
+    let size = page_size.unwrap_or(20).clamp(1, 100);
+
+    // 先查出满足条件的全部 candidate id/row
+    let rows = if uncategorized == Some(true) {
+        sqlx::query(
+            "SELECT s.* FROM songs s
+             WHERE NOT EXISTS (SELECT 1 FROM song_collections sc WHERE sc.song_id = s.id)
+             ORDER BY s.updated_at DESC",
+        )
+        .fetch_all(&state.pool)
+        .await?
+    } else if let Some(cid) = collection_id {
+        sqlx::query(
+            "SELECT s.* FROM songs s
+             JOIN song_collections sc ON sc.song_id = s.id
+             WHERE sc.collection_id = ?
+             ORDER BY s.updated_at DESC",
+        )
+        .bind(cid)
+        .fetch_all(&state.pool)
+        .await?
+    } else {
+        sqlx::query("SELECT * FROM songs ORDER BY updated_at DESC")
+            .fetch_all(&state.pool)
+            .await?
+    };
+
+    let search = search.as_deref().map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty());
+    let mut filtered_songs: Vec<SongDto> = Vec::new();
+    for row in rows {
+        let dto = crate::db::models::song_from_row(&row);
+        if let Some(q) = &search {
+            let hit = dto.title.to_lowercase().contains(q)
+                || dto.artist.to_lowercase().contains(q)
+                || dto.tags.to_lowercase().contains(q);
+            if !hit {
+                continue;
+            }
+        }
+        filtered_songs.push(dto);
+    }
+
+    let total = filtered_songs.len() as i64;
+    let total_pages = if total == 0 { 1 } else { (total + size - 1) / size };
+    let current_page = page_num.min(total_pages).max(1);
+    let offset = ((current_page - 1) * size) as usize;
+
+    let page_slice = if offset < filtered_songs.len() {
+        let end = (offset + size as usize).min(filtered_songs.len());
+        &filtered_songs[offset..end]
+    } else {
+        &[][..]
+    };
+
+    let mut items = Vec::with_capacity(page_slice.len());
+    for s in page_slice {
+        items.push(load_song_detail(&state.pool, s.clone()).await?);
+    }
+
+    let (all_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM songs")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or((0,));
+    let (uncategorized_count,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM songs s WHERE NOT EXISTS (SELECT 1 FROM song_collections sc WHERE sc.song_id = s.id)",
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or((0,));
+
+    Ok(crate::db::models::PagedSongsDto {
+        items,
+        total,
+        all_count,
+        uncategorized_count,
+        page: current_page,
+        page_size: size,
+        total_pages,
+    })
+}
+
 /// 查询曲谱列表（可按分组过滤、按标题/艺术家搜索）
 #[tauri::command]
 pub async fn get_songs(

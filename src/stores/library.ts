@@ -17,6 +17,14 @@ export const useLibraryStore = defineStore("library", () => {
   const collections = ref<CollectionDto[]>([]);
   const loading = ref(false);
 
+  /** 分页状态 */
+  const page = ref(1);
+  const pageSize = ref(20);
+  const total = ref(0);
+  const allCount = ref(0);
+  const uncategorizedCount = ref(0);
+  const totalPages = ref(1);
+
   /** 'all' | 'uncategorized' | collectionId */
   const activeCollection = ref<number | "all" | "uncategorized">("all");
   const search = ref("");
@@ -24,7 +32,21 @@ export const useLibraryStore = defineStore("library", () => {
   async function loadSongs() {
     loading.value = true;
     try {
-      songs.value = await api.getSongs(null, null);
+      const isUncategorized = activeCollection.value === "uncategorized";
+      const collectionId = typeof activeCollection.value === "number" ? activeCollection.value : null;
+      const res = await api.getSongsPaged(
+        page.value,
+        pageSize.value,
+        collectionId,
+        isUncategorized,
+        search.value ? search.value.trim() : null,
+      );
+      songs.value = res.items;
+      total.value = res.total;
+      allCount.value = res.allCount;
+      uncategorizedCount.value = res.uncategorizedCount;
+      totalPages.value = res.totalPages;
+      page.value = res.page;
     } finally {
       loading.value = false;
     }
@@ -38,23 +60,7 @@ export const useLibraryStore = defineStore("library", () => {
     await Promise.all([loadSongs(), loadCollections()]);
   }
 
-  const filteredSongs = computed(() => {
-    const q = (search.value ?? "").toString().trim().toLowerCase();
-    return songs.value.filter((s) => {
-      if (activeCollection.value === "uncategorized" && s.collectionIds.length > 0) return false;
-      if (typeof activeCollection.value === "number" && !s.collectionIds.includes(activeCollection.value)) {
-        return false;
-      }
-      if (q) {
-        const hit =
-          s.title.toLowerCase().includes(q) ||
-          s.artist.toLowerCase().includes(q) ||
-          s.tags.toLowerCase().includes(q);
-        if (!hit) return false;
-      }
-      return true;
-    });
-  });
+  const filteredSongs = computed(() => songs.value);
 
   // ------- 图片 URL 助手 -------
 
@@ -70,6 +76,12 @@ export const useLibraryStore = defineStore("library", () => {
     songs,
     collections,
     loading,
+    page,
+    pageSize,
+    total,
+    allCount,
+    uncategorizedCount,
+    totalPages,
     activeCollection,
     search,
     filteredSongs,

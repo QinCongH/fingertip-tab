@@ -83,7 +83,7 @@
               {{ s.general.library_path || "…" }}
             </div>
           </div>
-          <v-btn variant="tonal" prepend-icon="mdi-folder-move-outline" @click="migrateOpen = true">
+          <v-btn variant="tonal" prepend-icon="mdi-folder-move-outline" :loading="switching" @click="doSwitch">
             {{ t("settings.change_path") }}
           </v-btn>
         </div>
@@ -206,6 +206,51 @@
             @update:model-value="saveNow"
           />
         </div>
+      </template>
+
+      <!-- ============ 局域网共享 ============ -->
+      <template v-else-if="active === 'share'">
+        <div class="st-display text-h3 mb-8">{{ t("share.title") }}</div>
+
+        <div class="setting-row">
+          <div class="flex-grow-1">
+            <div class="font-weight-bold">{{ t("share.switch_title") }}</div>
+            <div class="text-body-2" style="opacity: 0.5">{{ t("share.switch_desc") }}</div>
+          </div>
+          <v-switch
+            v-model="shareActive"
+            color="primary"
+            hide-details
+            density="comfortable"
+            :loading="shareLoading"
+            @update:model-value="toggleShare"
+          />
+        </div>
+
+        <template v-if="shareActive && shareInfo">
+          <div class="setting-row align-start">
+            <div class="flex-grow-1">
+              <div class="font-weight-bold mb-2">{{ t("share.status_running") }}</div>
+              <div class="st-mono text-body-2 mb-2" style="color: var(--st-coral)">
+                {{ shareInfo.url }}
+              </div>
+              <div class="text-caption" style="opacity: 0.6">
+                {{ t("share.hint") }}
+              </div>
+              <div class="mt-4">
+                <v-btn variant="tonal" size="small" prepend-icon="mdi-content-copy" @click="copyShareUrl">
+                  {{ t("share.copy") }}
+                </v-btn>
+              </div>
+            </div>
+
+            <div class="share-qr-card pa-3 rounded bg-grey-darken-4 d-flex flex-column align-center">
+              <img v-if="shareQrUrl" :src="shareQrUrl" alt="QR" style="width: 160px; height: 160px; border-radius: 4px;" />
+              <v-progress-circular v-else indeterminate color="primary" class="my-8" />
+              <div class="st-mono text-caption mt-2">{{ shareInfo.ip }}:{{ shareInfo.port }}</div>
+            </div>
+          </div>
+        </template>
       </template>
 
       <!-- ============ AI 控制 ============ -->
@@ -479,13 +524,13 @@
 
     <!-- ============ 弹窗 ============ -->
 
-    <!-- 修改存储路径确认 -->
+    <!-- 切换工作区确认（探测后按目录状态给出差异化提示） -->
     <ConfirmDialog
-      v-model="migrateOpen"
-      :title="t('settings.migrate_confirm_title')"
-      :text="t('settings.migrate_confirm_text')"
-      danger
-      @confirm="doMigrate"
+      v-model="switchOpen"
+      :title="switchDialog.title"
+      :text="switchDialog.text"
+      :danger="switchDialog.danger"
+      @confirm="confirmSwitch"
     />
     <!-- 恢复备份确认 -->
     <ConfirmDialog
@@ -517,10 +562,12 @@ import { api } from "@/lib/tauri";
 import { t } from "@/i18n";
 import { useSettingsStore } from "@/stores/settings";
 import { useToastStore, errText } from "@/stores/toast";
+import QRCode from "qrcode";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import ShortcutInput from "@/components/ShortcutInput.vue";
 import WindowControls from "@/components/WindowControls.vue";
 import { listCameras } from "@/lib/headshake";
+import type { ShareInfo, LibraryProbe } from "@/lib/tauri";
 
 const router = useRouter();
 const settings = useSettingsStore();
@@ -531,6 +578,7 @@ const s = settings.settings;
 const sections = computed(() => [
   { value: "general", icon: "mdi-tune-vertical-variant", title: t("settings.tab_general") },
   { value: "display", icon: "mdi-television-classic", title: t("settings.tab_display") },
+  { value: "share", icon: "mdi-qrcode", title: t("share.title") },
   { value: "ai", icon: "mdi-motion-sensor", title: t("settings.tab_ai") },
   { value: "gp", icon: "mdi-guitar-electric", title: t("settings.tab_gp") },
   { value: "shortcuts", icon: "mdi-keyboard", title: t("settings.tab_shortcuts") },
@@ -554,21 +602,78 @@ function onLanguageChange() {
   saveNow();
 }
 
-const migrateOpen = ref(false);
-const migrating = ref(false);
+const switchOpen = ref(false);
+const switching = ref(false);
+/** 待确认的目标目录与探测结果 */
+const pendingPath = ref("");
+const pendingProbe = ref<LibraryProbe | null>(null);
 
-async function doMigrate() {
-  const picked = await open({ directory: true, multiple: false, title: t("settings.migrate_confirm_title") });
+const switchDialog = computed(() => {
+  const p = pendingProbe.value;
+  if (!p) return { title: "", text: "", danger: false };
+  if (p.hasDb) {
+    // 已是曲谱库 → 直接加载为工作区
+    return {
+      title: t("settings.switch_load_title"),
+      text: t("settings.switch_load_text"),
+      danger: false,
+    };
+  }
+  if (p.empty || !p.exists) {
+    // 空目录 → 初始化新工作区
+    return {
+      title: t("settings.switch_init_title"),
+      text: t("settings.switch_init_text"),
+      danger: false,
+    };
+  }
+  // 非空且无数据库 → 提示将新建工作区，不影响已有文件
+  return {
+    title: t("settings.switch_newin_title"),
+    text: t("settings.switch_newin_text"),
+    danger: true,
+  };
+});
+
+/** 选定文件夹 → 探测结构 → 按状态提示确认 */
+async function doSwitch() {
+  const picked = await open({
+    directory: true,
+    multiple: false,
+    title: t("settings.switch_picker_title"),
+  });
   if (!picked || typeof picked !== "string") return;
-  migrating.value = true;
-  toast.push(t("settings.migrating"), "info", 15000);
+
+  // 与当前库相同则直接提示，无需探测
+  if (picked === s.general.library_path) {
+    toast.error(t("settings.switch_same"));
+    return;
+  }
+
   try {
-    await api.migrateLibrary(picked);
+    const probe = await api.probeLibraryPath(picked);
+    pendingPath.value = picked;
+    pendingProbe.value = probe;
+    switchOpen.value = true;
+  } catch (e) {
+    toast.error(t("settings.switch_failed", { msg: errText(e) }));
+  }
+}
+
+/** 用户确认后执行切换，随后重启应用以重新加载全部资源 */
+async function confirmSwitch() {
+  if (!pendingPath.value) return;
+  switching.value = true;
+  toast.push(t("settings.switching"), "info", 15000);
+  try {
+    await api.switchLibrary(pendingPath.value, true);
     await api.restartApp();
   } catch (e) {
-    toast.error(t("settings.migrate_failed", { msg: errText(e) }));
+    toast.error(t("settings.switch_failed", { msg: errText(e) }));
   } finally {
-    migrating.value = false;
+    switching.value = false;
+    pendingProbe.value = null;
+    pendingPath.value = "";
   }
 }
 
@@ -665,15 +770,84 @@ function setShortcut(key: keyof typeof s.shortcuts, combo: string) {
 // 关于
 // ---------------------------------------------------------------------------
 
-const version = ref("0.3.0");
+const version = ref("0.4.0");
 onMounted(async () => {
   try {
     version.value = await getVersion();
   } catch {
-    version.value = "0.3.0";
+    version.value = "0.4.0";
   }
   void probeCameras();
+  void checkShareStatus();
 });
+
+// ---------------------------------------------------------------------------
+// 局域网共享控制
+// ---------------------------------------------------------------------------
+
+const shareActive = ref(false);
+const shareLoading = ref(false);
+const shareInfo = ref<ShareInfo | null>(null);
+const shareQrUrl = ref("");
+
+async function checkShareStatus() {
+  try {
+    const info = await api.getShareInfo();
+    if (info) {
+      shareActive.value = true;
+      shareInfo.value = info;
+      shareQrUrl.value = await QRCode.toDataURL(info.url, {
+        width: 180,
+        margin: 1,
+        color: { dark: "#1A1A1A", light: "#F5F5F0" },
+      });
+    } else {
+      shareActive.value = false;
+      shareInfo.value = null;
+      shareQrUrl.value = "";
+    }
+  } catch {
+    // 忽略
+  }
+}
+
+async function toggleShare(val: boolean | null) {
+  shareLoading.value = true;
+  try {
+    if (val) {
+      const info = await api.startLibraryShare();
+      shareInfo.value = info;
+      shareActive.value = true;
+      shareQrUrl.value = await QRCode.toDataURL(info.url, {
+        width: 180,
+        margin: 1,
+        color: { dark: "#1A1A1A", light: "#F5F5F0" },
+      });
+      toast.success(t("share.status_running"));
+    } else {
+      await api.stopShare();
+      shareActive.value = false;
+      shareInfo.value = null;
+      shareQrUrl.value = "";
+      toast.push(t("share.stopped"), "info");
+    }
+  } catch (e) {
+    toast.error(t("share.failed", { msg: errText(e) }));
+    shareActive.value = false;
+  } finally {
+    shareLoading.value = false;
+  }
+}
+
+async function copyShareUrl() {
+  if (!shareInfo.value) return;
+  try {
+    await navigator.clipboard.writeText(shareInfo.value.url);
+    toast.success(t("share.copied"));
+  } catch (e) {
+    toast.error(errText(e));
+  }
+}
 
 const UPDATE_URL = "https://github.com/QinCongH/fingertip-tab/tags";
 const HELP_URL = "https://github.com/QinCongH/fingertip-tab/blob/main/README.md";

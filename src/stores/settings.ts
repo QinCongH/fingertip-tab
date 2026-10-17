@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   appearance: {
     theme: "dark",
-    default_view_mode: "fixed",
+    default_view_mode: "dual_horizontal",
     bg_color: "#1A1A1A",
     zoom_mode: "fit_height",
   },

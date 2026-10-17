@@ -34,6 +34,19 @@ pub struct SongDto {
     pub collection_ids: Vec<i64>,
 }
 
+/// 曲谱分页查询结果 DTO
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PagedSongsDto {
+    pub items: Vec<SongDto>,
+    pub total: i64,
+    pub all_count: i64,
+    pub uncategorized_count: i64,
+    pub page: i64,
+    pub page_size: i64,
+    pub total_pages: i64,
+}
+
 /// 分组 DTO
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -126,10 +126,17 @@ pub fn lan_ipv4() -> Result<IpAddr> {
 async fn spawn_server() -> Result<(u16, oneshot::Sender<()>)> {
     let (tx, rx) = oneshot::channel::<()>();
     let app: Router = Router::new()
+        // 根路由及免 Token 开放端点
+        .route("/", get(root_page))
+        .route("/api/songs", get(api_songs_open))
+        .route("/api/song", get(api_song_open))
+        .route("/api/song/detail/:id", get(api_song_by_id_open))
+        .route("/api/file/:uuid/:ext", get(api_file_open))
+        // 兼容原有的带 token 路由
         .route("/s/:token", get(mobile_page))
         .route("/api/songs/:token", get(api_songs))
-        .route("/api/song/:token/:id", get(api_song_by_id))
         .route("/api/song/:token", get(api_song))
+        .route("/api/song-detail/:token/:id", get(api_song_by_id))
         .route("/api/file/:token/:uuid/:ext", get(api_file));
 
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], 0)))
@@ -200,7 +207,7 @@ pub async fn start_library_share() -> Result<ShareInfo> {
     let ip = lan_ipv4()?;
     let ip_str = ip.to_string();
     Ok(ShareInfo {
-        url: format!("http://{ip_str}:{port}/s/{token}"),
+        url: format!("http://{ip_str}:{port}/"),
         ip: ip_str,
         port,
         token,
@@ -220,8 +227,13 @@ pub async fn get_share_info() -> Result<Option<ShareInfo>> {
         return Ok(None);
     };
     let ip_str = ip.to_string();
+    let url = if cur.song_id.is_none() {
+        format!("http://{ip_str}:0/")
+    } else {
+        format!("http://{ip_str}:0/s/{}", cur.token)
+    };
     Ok(Some(ShareInfo {
-        url: format!("http://{ip_str}:0/s/{}", cur.token),
+        url,
         ip: ip_str,
         port: 0,
         token: cur.token.clone(),
@@ -264,6 +276,52 @@ async fn check_token_song(token: &str) -> Option<i64> {
         return None;
     }
     session.song_id
+}
+
+/// 校验是否有有效共享会话（用于免 token 路由）
+async fn is_share_active() -> bool {
+    let s = session().read().await;
+    s.is_some()
+}
+
+/// 根路由入口：无 token 直接访问（优先整库共享；若是单曲共享则直接打开该单曲）
+async fn root_page() -> Response {
+    let s = session().read().await;
+    let Some(sess) = s.as_ref() else {
+        return not_found();
+    };
+    let token = sess.token.clone();
+    let is_single = sess.song_id;
+    drop(s);
+
+    if let Some(song_id) = is_single {
+        let state = take_context().await;
+        let Some(state) = state else { return not_found() };
+        let row = match sqlx::query("SELECT * FROM songs WHERE id = ?")
+            .bind(song_id)
+            .fetch_one(&state.pool)
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => return not_found(),
+        };
+        let song = song_from_row(&row);
+        let html = render_single_page(&token, &song.title, &song.artist, &song.format);
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            html,
+        )
+            .into_response();
+    }
+
+    let html = render_library_mobile_page(&token);
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        html,
+    )
+        .into_response()
 }
 
 /// 移动端统一入口：如果会话为整库共享（song_id: None），渲染带搜索框的乐谱列表；如果会话为单曲共享，直接打开该曲谱
@@ -309,6 +367,14 @@ struct SearchQuery {
     q: Option<String>,
 }
 
+/// 乐谱列表 JSON（免 Token 开放端点）
+async fn api_songs_open(Query(params): Query<SearchQuery>) -> Response {
+    if !is_share_active().await {
+        return not_found();
+    }
+    fetch_songs_list(params).await
+}
+
 /// 乐谱列表 JSON（支持搜索过滤）
 async fn api_songs(
     AxPath(token): AxPath<String>,
@@ -317,6 +383,10 @@ async fn api_songs(
     if !is_token_valid(&token).await {
         return not_found();
     }
+    fetch_songs_list(params).await
+}
+
+async fn fetch_songs_list(params: SearchQuery) -> Response {
     let state = take_context().await;
     let Some(state) = state else { return not_found() };
 
@@ -357,12 +427,33 @@ async fn api_songs(
         .into_response()
 }
 
+/// 单曲元数据 JSON（免 Token 开放端点，按当前共享会话的 song_id 取）
+async fn api_song_open() -> Response {
+    let s = session().read().await;
+    let Some(sess) = s.as_ref() else {
+        return not_found();
+    };
+    let Some(song_id) = sess.song_id else {
+        return not_found();
+    };
+    drop(s);
+    fetch_song_json_by_id(song_id).await
+}
+
+/// 按 ID 获取曲谱元数据 JSON（免 Token 开放端点）
+async fn api_song_by_id_open(AxPath(id): AxPath<i64>) -> Response {
+    if !is_share_active().await {
+        return not_found();
+    }
+    fetch_song_json_by_id(id).await
+}
+
 /// 单曲元数据 JSON（兼容旧端点 /api/song/:token，按单曲会话绑定的 song_id 取）
 async fn api_song(AxPath(token): AxPath<String>) -> Response {
     let Some(song_id) = check_token_song(&token).await else {
         return not_found();
     };
-    fetch_song_json(&token, song_id).await
+    fetch_song_json_by_id(song_id).await
 }
 
 /// 按 ID 获取曲谱元数据 JSON（/api/song/:token/:id）
@@ -370,10 +461,10 @@ async fn api_song_by_id(AxPath((token, id)): AxPath<(String, i64)>) -> Response 
     if !is_token_valid(&token).await {
         return not_found();
     }
-    fetch_song_json(&token, id).await
+    fetch_song_json_by_id(id).await
 }
 
-async fn fetch_song_json(_token: &str, song_id: i64) -> Response {
+async fn fetch_song_json_by_id(song_id: i64) -> Response {
     let state = take_context().await;
     let Some(state) = state else { return not_found() };
     let row = match sqlx::query("SELECT * FROM songs WHERE id = ?")
@@ -395,6 +486,16 @@ async fn fetch_song_json(_token: &str, song_id: i64) -> Response {
         .into_response()
 }
 
+/// 曲谱文件流（免 Token 开放端点）
+async fn api_file_open(
+    AxPath((uuid, ext)): AxPath<(String, String)>,
+) -> Response {
+    if !is_share_active().await {
+        return not_found();
+    }
+    fetch_file_content(uuid, ext).await
+}
+
 /// 曲谱文件流：图片谱分页 / GP 文件（uuid + 扩展名白名单校验，路径锁定在库目录内）
 async fn api_file(
     AxPath((token, uuid, ext)): AxPath<(String, String, String)>,
@@ -402,6 +503,10 @@ async fn api_file(
     if !is_token_valid(&token).await {
         return not_found();
     }
+    fetch_file_content(uuid, ext).await
+}
+
+async fn fetch_file_content(uuid: String, ext: String) -> Response {
     let ext_lower = ext.to_lowercase();
     let (dir, mime): (&str, &str) = match ext_lower.as_str() {
         "png" => ("Resources/Images", "image/png"),
@@ -503,8 +608,9 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
 .search-clear {{ position:absolute; right:10px; top:50%; transform:translateY(-50%); width:22px; height:22px; background:rgba(255,255,255,.2); color:#fff; border:0; border-radius:50%; display:none; align-items:center; justify-content:center; cursor:pointer; font-size:12px; }}
 
 .song-list {{ padding:12px 14px 60px; display:flex; flex-direction:column; gap:10px; }}
-.song-card {{ background:#1a1a1a; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; transition:background .15s ease, transform .1s ease; }}
-.song-card:active {{ background:#262626; transform:scale(0.985); }}
+.song-card {{ background:#1a1a1a; border:2px solid rgba(255,255,255,.08); border-radius:10px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; transition:background .15s ease, transform .1s ease, border-color .15s ease, box-shadow .15s ease; outline:none; }}
+.song-card:hover, .song-card.focused {{ background:#252525; border-color:#ff6b6b; box-shadow:0 0 12px rgba(255,107,107,.35); transform:translateY(-1px); }}
+.song-card:active {{ background:#2a2a2a; transform:scale(0.985); }}
 .song-meta {{ min-width:0; flex:1; }}
 .song-title {{ font-size:15px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
 .song-sub {{ font-size:12px; color:rgba(255,255,255,.5); margin-top:4px; display:flex; align-items:center; gap:8px; }}
@@ -514,7 +620,51 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
 
 .state-tip {{ padding:60px 16px; text-align:center; font-size:14px; opacity:.55; }}
 
-.detail-header {{ position:sticky; top:0; z-index:30; background:rgba(18,18,18,.96); backdrop-filter:blur(10px); border-bottom:2px solid rgba(255,255,255,.15); padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; }}
+.detail-header {{ position:sticky; top:0; z-index:30; background:rgba(18,18,18,.96); backdrop-filter:blur(10px); border-bottom:2px solid rgba(255,255,255,.15); padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; transition:transform .2s ease, opacity .2s ease; }}
+body.is-fullscreen .detail-header {{ display:none !important; }}
+
+/* 全屏状态下悬浮退出全屏触碰区与按钮 */
+#fs-hover-trigger {{
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  z-index: 1000;
+  justify-content: center;
+  align-items: flex-start;
+  pointer-events: auto;
+}}
+body.is-fullscreen #fs-hover-trigger {{
+  display: flex !important;
+}}
+#btn-exit-fullscreen {{
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity .2s ease, transform .2s ease, background .15s ease;
+  background: rgba(26,26,26,.92);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.3);
+  padding: 6px 14px;
+  border-radius: 0 0 8px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.6);
+}}
+#fs-hover-trigger:hover #btn-exit-fullscreen {{
+  opacity: 1;
+  transform: translateY(0);
+}}
+#btn-exit-fullscreen:hover {{
+  background: rgba(255,107,107,.85);
+  border-color: #ff6b6b;
+}}
 .btn-back {{ background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.25); padding:6px 12px; font-size:13px; font-weight:700; display:flex; align-items:center; gap:4px; cursor:pointer; border-radius:6px; flex-shrink:0; }}
 .btn-back:active {{ background:rgba(255,255,255,.28); }}
 .detail-title-wrap {{ min-width:0; flex:1; text-align:left; }}
@@ -546,16 +696,169 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
 .gp-menu-item {{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-size:13px; font-weight:500; padding:4px 0; }}
 .gp-menu-item input[type="checkbox"] {{ width:16px; height:16px; accent-color:#ff6b6b; cursor:pointer; }}
 
-#img-container {{ display:flex; flex-direction:column; gap:12px; padding:12px 8px 90px; max-width:900px; margin:0 auto; }}
+/* ========================================================================= */
+/* 局域网图片查看模式：mode-fit (默认自适应满高) 与 mode-scroll (垂直居中滚动) */
+/* ========================================================================= */
+#img-container.mode-fit {{
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  justify-content: safe center !important;
+  align-items: center !important;
+  height: calc(100vh - 64px) !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  padding: 10px 48px !important;
+  margin: 0 auto !important;
+  gap: 16px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  box-sizing: border-box !important;
+}}
+body.is-fullscreen #img-container.mode-fit {{
+  height: 100vh !important;
+  padding: 16px 48px !important;
+}}
+#img-container.mode-fit .img-page-wrap {{
+  height: 100% !important;
+  max-height: calc(100vh - 80px) !important;
+  width: auto !important;
+  max-width: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  flex: 0 0 auto !important;
+  position: relative !important;
+}}
+#img-container.mode-fit .img-page-wrap img {{
+  height: 100% !important;
+  max-height: calc(100vh - 80px) !important;
+  width: auto !important;
+  max-width: none !important;
+  object-fit: contain !important;
+  display: block !important;
+  border-radius: 4px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.6) !important;
+}}
+
+/* 纵向连续瀑布流滚动模式 (mode-scroll)：严格水平居中 */
+#img-container.mode-scroll {{
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 16px !important;
+  padding: 20px 12px 100px !important;
+  width: 100% !important;
+  max-width: 1000px !important;
+  margin: 0 auto !important;
+  box-sizing: border-box !important;
+}}
+#img-container.mode-scroll .img-page-wrap {{
+  position: relative !important;
+  background: #f5f5f0 !important;
+  cursor: zoom-in !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,.5) !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 900px !important;
+  margin: 0 auto !important;
+  border-radius: 4px !important;
+  overflow: hidden !important;
+}}
+#img-container.mode-scroll .img-page-wrap img {{
+  width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  margin: 0 auto !important;
+}}
+
+.btn-detail-mode-toggle {{
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.2);
+  height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+}}
+.btn-detail-mode-toggle:active {{ background: rgba(255,255,255,.25); }}
+
 .img-page-wrap {{ position:relative; background:#f5f5f0; cursor:zoom-in; border:1px solid rgba(255,255,255,.1); box-shadow:0 4px 16px rgba(0,0,0,.5); }}
 .img-page-wrap img {{ width:100%; height:auto; display:block; }}
 .img-page-num {{ position:absolute; right:8px; bottom:8px; background:rgba(13,13,13,.75); color:#f5f5f0; font-size:11px; padding:2px 6px; font-family:monospace; pointer-events:none; border-radius:4px; }}
+
+/* 局域网整库查看：大屏与平板在滚动模式下的自适应切分 */
+@media (min-width: 768px) {{
+  #img-container.mode-scroll {{
+    max-width: 1000px;
+    margin: 0 auto;
+  }}
+  #img-container.mode-scroll .img-page-wrap {{
+    max-width: 900px;
+    margin: 0 auto;
+  }}
+  #img-container.mode-scroll .img-page-wrap img {{
+    max-height: none;
+    width: 100%;
+    margin: 0 auto;
+  }}
+}}
 
 #img-scroll-bar {{ position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:50; background:rgba(26,26,26,.94); backdrop-filter:blur(10px); border:2px solid rgba(255,255,255,.2); padding:8px 14px; display:flex; align-items:center; gap:12px; box-shadow:0 8px 30px rgba(0,0,0,.7); max-width:calc(100vw - 32px); border-radius:8px; }}
 #img-btn-scroll {{ background:#ff6b6b; color:#fff; border:0; font-weight:700; font-size:13px; padding:6px 14px; cursor:pointer; display:flex; align-items:center; gap:6px; min-width:82px; justify-content:center; border-radius:6px; }}
 .img-speed-group {{ display:flex; align-items:center; gap:6px; font-size:12px; }}
 .img-speed-btn {{ background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.2); width:28px; height:28px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:4px; }}
 .img-speed-val {{ font-family:monospace; font-size:12px; min-width:44px; text-align:center; color:#f5f5f0; }}
+.img-speed-input {{ width:52px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); color:#fff; font-family:monospace; font-size:12px; text-align:center; padding:3px 2px; border-radius:4px; outline:none; }}
+.img-speed-input:focus {{ border-color:#ff6b6b; background:rgba(255,255,255,.18); }}
+
+/* 左右两侧浮动滚动箭头按钮 */
+.nav-scroll-btn {{
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 45;
+  width: 44px;
+  height: 68px;
+  background: rgba(26, 26, 26, 0.72);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease, opacity 0.2s ease;
+  opacity: 0.75;
+  user-select: none;
+  -webkit-user-select: none;
+}}
+.nav-scroll-btn:hover, .nav-scroll-btn:focus {{
+  background: rgba(255, 107, 107, 0.88);
+  border-color: #ff6b6b;
+  opacity: 1;
+  outline: none;
+}}
+.nav-scroll-btn:active {{
+  transform: translateY(-50%) scale(0.95);
+}}
+.nav-scroll-btn.left {{ left: 8px; }}
+.nav-scroll-btn.right {{ right: 8px; }}
 
 #img-lightbox {{ display:none; position:fixed; inset:0; z-index:9999; background:#000; touch-action:none; user-select:none; -webkit-user-select:none; }}
 #img-lightbox.active {{ display:flex; flex-direction:column; }}
@@ -601,6 +904,9 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
       <div class="detail-sub" id="cur-sub">--</div>
     </div>
     <div class="detail-actions">
+      <button class="btn-detail-mode-toggle" id="btn-detail-mode-toggle" style="display:none;" title="切换查看模式">
+        <span id="detail-mode-text">自适应</span>
+      </button>
       <button class="btn-icon" id="btn-detail-settings" style="display:none;" title="谱面显示设置">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -610,6 +916,13 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
       <span class="badge-gp" id="detail-format-badge" style="display:none;">GP</span>
       <span class="badge-img" id="detail-page-badge" style="display:none;">1 P</span>
     </div>
+  </div>
+
+  <div id="fs-hover-trigger">
+    <button id="btn-exit-fullscreen" title="退出全屏">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+      <span>退出全屏</span>
+    </button>
   </div>
 
   <div id="gp-sheet-menu">
@@ -650,12 +963,19 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
   </div>
 
   <div id="img-section" style="display:none;">
+    <button class="nav-scroll-btn left" id="btn-nav-left" title="向左滚动">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="nav-scroll-btn right" id="btn-nav-right" title="向右滚动">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
     <div id="img-container"></div>
     <div id="img-scroll-bar">
       <button id="img-btn-scroll">▶ 滚动</button>
       <div class="img-speed-group">
         <button class="img-speed-btn" id="img-speed-down">−</button>
-        <span class="img-speed-val" id="img-speed-label">30 px/s</span>
+        <input type="number" id="img-speed-input" class="img-speed-input" value="30" min="1" max="500" step="1" />
+        <span class="img-speed-val" style="min-width:auto; margin-left:-2px;">px/s</span>
         <button class="img-speed-btn" id="img-speed-up">+</button>
       </div>
     </div>
@@ -698,6 +1018,8 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
   var curSub = document.getElementById('cur-sub');
   var btnDetailSettings = document.getElementById('btn-detail-settings');
   var btnDetailFs = document.getElementById('btn-detail-fs');
+  var btnDetailModeToggle = document.getElementById('btn-detail-mode-toggle');
+  var detailModeText = document.getElementById('detail-mode-text');
   var detailFormatBadge = document.getElementById('detail-format-badge');
   var detailPageBadge = document.getElementById('detail-page-badge');
 
@@ -723,7 +1045,7 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
   var imgContainer = document.getElementById('img-container');
   var imgScrollBar = document.getElementById('img-scroll-bar');
   var imgBtnScroll = document.getElementById('img-btn-scroll');
-  var imgSpeedLabel = document.getElementById('img-speed-label');
+  var imgSpeedInput = document.getElementById('img-speed-input');
   var imgSpeedDown = document.getElementById('img-speed-down');
   var imgSpeedUp = document.getElementById('img-speed-up');
   var imgLightbox = document.getElementById('img-lightbox');
@@ -749,11 +1071,26 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
   var imgTouchStartX = 0, imgTouchStartY = 0, imgTouchDist = 0, imgIsPanning = false;
   var imgAutoScrolling = false, imgScrollSpeed = 30, imgLastScrollTime = 0, imgScrollRaf = null;
 
+  var focusedSongIndex = 0;
+  var currentSongCards = [];
+
+  function updateSongCardFocus() {{
+    for (var i = 0; i < currentSongCards.length; i++) {{
+      if (i === focusedSongIndex) {{
+        currentSongCards[i].classList.add('focused');
+        currentSongCards[i].scrollIntoView({{ block: 'nearest', behavior: 'smooth' }});
+      }} else {{
+        currentSongCards[i].classList.remove('focused');
+      }}
+    }}
+  }}
+
   function loadLibrary(query) {{
-    var url = '/api/songs/' + TOKEN + (query ? '?q=' + encodeURIComponent(query) : '');
+    var url = (TOKEN ? '/api/songs/' + TOKEN : '/api/songs') + (query ? '?q=' + encodeURIComponent(query) : '');
     fetch(url).then(function(r) {{ return r.json(); }}).then(function(data) {{
       allSongs = data || [];
       totalBadge.textContent = allSongs.length + ' 首曲谱';
+      focusedSongIndex = 0;
       renderSongList(allSongs);
     }}).catch(function(e) {{
       console.error(e);
@@ -763,13 +1100,15 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
 
   function renderSongList(list) {{
     songList.innerHTML = '';
+    currentSongCards = [];
     if (!list.length) {{
       songList.innerHTML = '<div class="state-tip">未找到匹配的曲谱</div>';
       return;
     }}
-    list.forEach(function(s) {{
+    list.forEach(function(s, idx) {{
       var card = document.createElement('div');
-      card.className = 'song-card';
+      card.className = 'song-card' + (idx === focusedSongIndex ? ' focused' : '');
+      card.setAttribute('tabindex', '0');
       var isGp = s.format === 'gp';
       var badgeHtml = isGp
         ? '<span class="badge-gp">GP</span>'
@@ -782,9 +1121,12 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
         '</div>' +
         '<div class="song-arrow">›</div>';
       card.addEventListener('click', function() {{
+        focusedSongIndex = idx;
+        updateSongCardFocus();
         openSongDetail(s);
       }});
       songList.appendChild(card);
+      currentSongCards.push(card);
     }});
   }}
 
@@ -822,6 +1164,7 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
     gpSheetMenu.classList.remove('open');
     detailView.style.display = 'none';
     libView.style.display = 'block';
+    updateSongCardFocus();
     window.scrollTo({{ top: 0 }});
   }}
 
@@ -838,10 +1181,13 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
 
     if (s.format === 'gp') {{
       imgSection.style.display = 'none';
+      if (btnDetailModeToggle) btnDetailModeToggle.style.display = 'none';
+      if (imgScrollBar) imgScrollBar.style.display = 'none';
       gpSection.style.display = 'block';
       renderGpDetail(s);
     }} else {{
       gpSection.style.display = 'none';
+      if (btnDetailModeToggle) btnDetailModeToggle.style.display = 'flex';
       imgSection.style.display = 'block';
       renderImgDetail(s);
     }}
@@ -863,7 +1209,8 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
     var ext = s.fileType;
     if (!uuid || !ext) {{ gpLoading.textContent = '曲谱信息不完整'; return; }}
 
-    fetch('/api/file/' + TOKEN + '/' + uuid + '/' + encodeURIComponent(ext))
+    var filePrefix = TOKEN ? ('/api/file/' + TOKEN + '/') : '/api/file/';
+    fetch(filePrefix + uuid + '/' + encodeURIComponent(ext))
       .then(function(r) {{ if (!r.ok) throw 0; return r.arrayBuffer(); }})
       .then(function(buf) {{
         gpLoading.style.display = 'none';
@@ -1066,12 +1413,13 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
       return;
     }}
 
+    var filePrefix = TOKEN ? ('/api/file/' + TOKEN + '/') : '/api/file/';
     imgCurPages = pages.map(function(p, i) {{
       return {{
         idx: i,
         uuid: p.uuid,
         fileType: p.fileType,
-        src: '/api/file/' + TOKEN + '/' + p.uuid + '/' + encodeURIComponent(p.fileType)
+        src: filePrefix + p.uuid + '/' + encodeURIComponent(p.fileType)
       }};
     }});
 
@@ -1131,6 +1479,23 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
     }}
   }}
 
+  function updateFullscreenClass() {{
+    var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (isFs) document.body.classList.add('is-fullscreen');
+    else document.body.classList.remove('is-fullscreen');
+  }}
+  document.addEventListener('fullscreenchange', updateFullscreenClass);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenClass);
+
+  var btnExitFs = document.getElementById('btn-exit-fullscreen');
+  if (btnExitFs) {{
+    btnExitFs.addEventListener('click', function(e) {{
+      e.stopPropagation();
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }});
+  }}
+
   btnDetailFs.addEventListener('click', function() {{ toggleFullScreen(); }});
   imgLbFs.addEventListener('click', function(e) {{
     e.stopPropagation();
@@ -1142,13 +1507,26 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
     else startImgAutoScroll();
   }});
   imgSpeedDown.addEventListener('click', function() {{
-    imgScrollSpeed = Math.max(10, imgScrollSpeed - 10);
-    imgSpeedLabel.textContent = imgScrollSpeed + ' px/s';
+    imgScrollSpeed = Math.max(1, imgScrollSpeed - 5);
+    if (imgSpeedInput) imgSpeedInput.value = imgScrollSpeed;
   }});
   imgSpeedUp.addEventListener('click', function() {{
-    imgScrollSpeed = Math.min(300, imgScrollSpeed + 10);
-    imgSpeedLabel.textContent = imgScrollSpeed + ' px/s';
+    imgScrollSpeed = Math.min(500, imgScrollSpeed + 5);
+    if (imgSpeedInput) imgSpeedInput.value = imgScrollSpeed;
   }});
+  if (imgSpeedInput) {{
+    imgSpeedInput.addEventListener('input', function() {{
+      var val = parseInt(imgSpeedInput.value, 10);
+      if (!isNaN(val) && val >= 1) {{
+        imgScrollSpeed = Math.min(500, val);
+      }}
+    }});
+    imgSpeedInput.addEventListener('change', function() {{
+      var val = parseInt(imgSpeedInput.value, 10);
+      imgScrollSpeed = isNaN(val) ? 30 : Math.max(1, Math.min(500, val));
+      imgSpeedInput.value = imgScrollSpeed;
+    }});
+  }}
 
   function startImgAutoScroll() {{
     imgAutoScrolling = true;
@@ -1182,6 +1560,154 @@ body {{ background:#121212; color:#f5f5f0; font-family:-apple-system,BlinkMacSys
     if (imgScrollBar && imgScrollBar.contains(e.target)) return;
     if (imgAutoScrolling) stopImgAutoScroll();
   }}, {{ passive: true }});
+
+  // -------------------------------------------------------------------------
+  // 模式切换与持久化：自适应满高（默认） / 垂直居中滚动
+  // -------------------------------------------------------------------------
+  var currentImgMode = localStorage.getItem('guest_viewer_mode') || 'fit';
+
+  function applyImgMode(m) {{
+    currentImgMode = m;
+    localStorage.setItem('guest_viewer_mode', m);
+    if (m === 'fit') {{
+      imgContainer.className = 'mode-fit';
+      if (detailModeText) detailModeText.textContent = '🖼 自适应';
+      if (imgScrollBar) imgScrollBar.style.display = 'none';
+      stopImgAutoScroll();
+    }} else {{
+      imgContainer.className = 'mode-scroll';
+      if (detailModeText) detailModeText.textContent = '📜 滚动';
+      if (currentSong && currentSong.format !== 'gp' && imgScrollBar) {{
+        imgScrollBar.style.display = 'flex';
+      }}
+    }}
+  }}
+
+  if (btnDetailModeToggle) {{
+    btnDetailModeToggle.addEventListener('click', function() {{
+      applyImgMode(currentImgMode === 'fit' ? 'scroll' : 'fit');
+    }});
+  }}
+  applyImgMode(currentImgMode);
+
+  // 左右两侧浮动滚动按钮点击处理
+  var btnNavLeft = document.getElementById('btn-nav-left');
+  var btnNavRight = document.getElementById('btn-nav-right');
+  if (btnNavLeft) {{
+    btnNavLeft.addEventListener('click', function(e) {{
+      e.stopPropagation();
+      if (currentImgMode === 'fit') {{
+        imgContainer.scrollBy({{ left: -window.innerWidth * 0.65, behavior: 'smooth' }});
+      }} else {{
+        window.scrollBy({{ top: -window.innerHeight * 0.75, behavior: 'smooth' }});
+      }}
+    }});
+  }}
+  if (btnNavRight) {{
+    btnNavRight.addEventListener('click', function(e) {{
+      e.stopPropagation();
+      if (currentImgMode === 'fit') {{
+        imgContainer.scrollBy({{ left: window.innerWidth * 0.65, behavior: 'smooth' }});
+      }} else {{
+        window.scrollBy({{ top: window.innerHeight * 0.75, behavior: 'smooth' }});
+      }}
+    }});
+  }}
+
+  // -------------------------------------------------------------------------
+  // 电视遥控器按键控制支持（TV Remote Control）
+  // 左右：滚动/翻页；上下：切换模式视图；返回：关闭大图或退出曲谱详情
+  // -------------------------------------------------------------------------
+  window.addEventListener('keydown', function(e) {{
+    var key = e.key;
+    var code = e.keyCode || e.which;
+
+    // 1. 返回键处理（ESC, Backspace, Android Back, Tizen/webOS Back）
+    var isBack = (key === 'Escape' || key === 'Back' || key === 'BrowserBack' || code === 8 || code === 4 || code === 10009);
+    if (isBack) {{
+      if (imgLightbox && imgLightbox.classList.contains('active')) {{
+        e.preventDefault();
+        imgLightbox.classList.remove('active');
+        return;
+      }}
+      if (detailView && detailView.style.display !== 'none') {{
+        e.preventDefault();
+        closeDetail();
+        return;
+      }}
+    }}
+
+    // 如果焦点在搜索框或输入框中，保留原生输入行为
+    var tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    // 2. 左右按键：滚动或切换页面
+    var isLeft = (key === 'ArrowLeft' || code === 21);
+    var isRight = (key === 'ArrowRight' || code === 22);
+    if (isLeft || isRight) {{
+      if (imgLightbox && imgLightbox.classList.contains('active')) {{
+        e.preventDefault();
+        openImgLightbox(isLeft ? imgCurIdx - 1 : imgCurIdx + 1);
+        return;
+      }}
+      if (detailView && detailView.style.display !== 'none') {{
+        e.preventDefault();
+        if (currentImgMode === 'fit') {{
+          imgContainer.scrollBy({{ left: isLeft ? -window.innerWidth * 0.7 : window.innerWidth * 0.7, behavior: 'smooth' }});
+        }} else {{
+          window.scrollBy({{ top: isLeft ? -window.innerHeight * 0.8 : window.innerHeight * 0.8, behavior: 'smooth' }});
+        }}
+        return;
+      }}
+    }}
+
+    // 3. 上下按键：
+    // - 列表视图下：切换选中的曲谱卡片（电视遥控器上下选择）
+    // - 详情预览下：切换视图排版模式（自适应满高 / 垂直滚动）
+    var isUp = (key === 'ArrowUp' || code === 19);
+    var isDown = (key === 'ArrowDown' || code === 20);
+    if (isUp || isDown) {{
+      var isListActive = (!detailView || detailView.style.display === 'none');
+      if (isListActive) {{
+        if (allSongs.length > 0) {{
+          e.preventDefault();
+          if (isDown) {{
+            focusedSongIndex = (focusedSongIndex + 1) % allSongs.length;
+          }} else {{
+            focusedSongIndex = (focusedSongIndex - 1 + allSongs.length) % allSongs.length;
+          }}
+          updateSongCardFocus();
+        }}
+        return;
+      }}
+
+      if (detailView && detailView.style.display !== 'none' && (!currentSong || currentSong.format !== 'gp')) {{
+        e.preventDefault();
+        applyImgMode(currentImgMode === 'fit' ? 'scroll' : 'fit');
+        return;
+      }}
+    }}
+
+    // 4. 确定/选择键：
+    // - 列表视图下：跳转到局域网曲谱预览页面（打开选中的曲谱）
+    // - 详情预览下：在滚动模式下切换播放/暂停
+    var isEnter = (key === 'Enter' || key === 'Select' || code === 13 || code === 23);
+    if (isEnter) {{
+      var isListActive = (!detailView || detailView.style.display === 'none');
+      if (isListActive) {{
+        if (allSongs.length > 0 && focusedSongIndex >= 0 && focusedSongIndex < allSongs.length) {{
+          e.preventDefault();
+          openSongDetail(allSongs[focusedSongIndex]);
+        }}
+        return;
+      }}
+      if (detailView && detailView.style.display !== 'none' && currentImgMode === 'scroll') {{
+        e.preventDefault();
+        if (imgAutoScrolling) stopImgAutoScroll();
+        else startImgAutoScroll();
+      }}
+    }}
+  }});
 
   loadLibrary('');
 }})();
@@ -1621,16 +2147,138 @@ p.sub {{ font-size:12px; opacity:.55; margin-top:2px; }}
 * {{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }}
 body {{ background:#0d0d0d; color:#f5f5f0; font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif; min-height:100vh; }}
 header {{ position:sticky; top:0; z-index:10; background:rgba(13,13,13,.94); backdrop-filter:blur(8px); padding:10px 14px; border-bottom:2px solid rgba(255,255,255,.15); display:flex; align-items:center; justify-content:space-between; gap:10px; }}
+body.is-fullscreen header {{ display:none !important; }}
+
+/* 全屏状态下悬浮退出全屏触碰区与按钮 */
+#fs-hover-trigger {{
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  z-index: 1000;
+  justify-content: center;
+  align-items: flex-start;
+  pointer-events: auto;
+}}
+body.is-fullscreen #fs-hover-trigger {{
+  display: flex !important;
+}}
+#btn-exit-fullscreen {{
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity .2s ease, transform .2s ease, background .15s ease;
+  background: rgba(26,26,26,.92);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.3);
+  padding: 6px 14px;
+  border-radius: 0 0 8px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.6);
+}}
+#fs-hover-trigger:hover #btn-exit-fullscreen {{
+  opacity: 1;
+  transform: translateY(0);
+}}
+#btn-exit-fullscreen:hover {{
+  background: rgba(255,107,107,.85);
+  border-color: #ff6b6b;
+}}
 h1 {{ font-size:16px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
 p.sub {{ font-size:12px; opacity:.55; margin-top:2px; }}
 .header-actions {{ display:flex; align-items:center; gap:8px; flex-shrink:0; }}
 .btn-icon {{ background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.2); width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; }}
 .btn-icon:active {{ background:rgba(255,255,255,.25); }}
 .badge {{ font-size:11px; background:#ff6b6b; color:#fff; font-weight:700; padding:4px 8px; border-radius:0; }}
-main {{ display:flex; flex-direction:column; gap:12px; padding:12px 8px 90px; max-width:900px; margin:0 auto; }}
-.page-wrap {{ position:relative; background:#f5f5f0; cursor:zoom-in; border:1px solid rgba(255,255,255,.1); box-shadow:0 4px 16px rgba(0,0,0,.5); }}
-.page-wrap img {{ width:100%; height:auto; display:block; }}
-.page-num {{ position:absolute; right:8px; bottom:8px; background:rgba(13,13,13,.75); color:#f5f5f0; font-size:11px; padding:2px 6px; font-family:monospace; pointer-events:none; }}
+.btn-mode-toggle {{ background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.2); height:34px; padding:0 10px; display:flex; align-items:center; gap:4px; cursor:pointer; font-size:12px; font-weight:600; border-radius:4px; }}
+.btn-mode-toggle:active {{ background:rgba(255,255,255,.25); }}
+
+/* 默认自适应满高分栏模式 (mode-fit)：高度100%，自适应宽度分配，紧凑靠中 */
+main.mode-fit {{
+  display: flex;
+  flex-direction: row;
+  justify-content: safe center;
+  align-items: center;
+  height: calc(100vh - 64px);
+  width: 100%;
+  max-width: 100vw;
+  padding: 10px 48px;
+  margin: 0 auto;
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}}
+body.is-fullscreen main.mode-fit {{
+  height: 100vh !important;
+  padding: 16px 48px !important;
+}}
+main.mode-fit .page-wrap {{
+  height: 100%;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 auto;
+  position: relative;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}}
+main.mode-fit .page-wrap img {{
+  height: 100%;
+  max-height: calc(100vh - 80px);
+  width: auto;
+  max-width: none;
+  object-fit: contain;
+  display: block;
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.6);
+}}
+
+/* 纵向连续滚动模式 (mode-scroll)：严格水平居中 */
+main.mode-scroll {{
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 16px !important;
+  padding: 16px 8px 90px !important;
+  max-width: 900px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+}}
+main.mode-scroll .page-wrap {{
+  position: relative !important;
+  background: #f5f5f0 !important;
+  cursor: zoom-in !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5) !important;
+  border-radius: 4px !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  max-width: 900px !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}}
+main.mode-scroll .page-wrap img {{
+  width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  margin: 0 auto !important;
+}}
+
+.page-num {{ position:absolute; right:8px; bottom:8px; background:rgba(13,13,13,.75); color:#f5f5f0; font-size:11px; padding:2px 6px; font-family:monospace; pointer-events:none; border-radius:2px; }}
 #empty {{ padding:60px 16px; text-align:center; font-size:14px; opacity:.6; }}
 
 /* 底部自动滚动浮动栏 */
@@ -1640,6 +2288,43 @@ main {{ display:flex; flex-direction:column; gap:12px; padding:12px 8px 90px; ma
 .speed-group {{ display:flex; align-items:center; gap:6px; font-size:12px; }}
 .speed-btn {{ background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.2); width:28px; height:28px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; }}
 .speed-val {{ font-family:monospace; font-size:12px; min-width:44px; text-align:center; color:#f5f5f0; }}
+.speed-input {{ width:52px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); color:#fff; font-family:monospace; font-size:12px; text-align:center; padding:3px 2px; border-radius:4px; outline:none; }}
+.speed-input:focus {{ border-color:#ff6b6b; background:rgba(255,255,255,.18); }}
+
+/* 左右两侧浮动滚动箭头按钮 */
+.nav-scroll-btn {{
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 45;
+  width: 44px;
+  height: 68px;
+  background: rgba(26, 26, 26, 0.72);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease, opacity 0.2s ease;
+  opacity: 0.75;
+  user-select: none;
+  -webkit-user-select: none;
+}}
+.nav-scroll-btn:hover, .nav-scroll-btn:focus {{
+  background: rgba(255, 107, 107, 0.88);
+  border-color: #ff6b6b;
+  opacity: 1;
+  outline: none;
+}}
+.nav-scroll-btn:active {{
+  transform: translateY(-50%) scale(0.95);
+}}
+.nav-scroll-btn.left {{ left: 8px; }}
+.nav-scroll-btn.right {{ right: 8px; }}
 
 /* 全屏大图预览弹窗 */
 #lightbox {{ display:none; position:fixed; inset:0; z-index:9999; background:#000; touch-action:none; user-select:none; -webkit-user-select:none; }}
@@ -1664,20 +2349,39 @@ main {{ display:flex; flex-direction:column; gap:12px; padding:12px 8px 90px; ma
     <p class="sub">{artist}</p>
   </div>
   <div class="header-actions">
+    <button class="btn-mode-toggle" id="btn-mode-toggle" title="切换排版模式">
+      <span id="mode-text">自适应</span>
+    </button>
     <button class="btn-icon" id="btn-fullscreen" title="全屏" aria-label="全屏">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></svg>
     </button>
     <span class="badge" id="page-total">…</span>
   </div>
 </header>
-<main id="list"><div id="empty">正在加载谱面…</div></main>
+
+<div id="fs-hover-trigger">
+  <button id="btn-exit-fullscreen" title="退出全屏">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+    <span>退出全屏</span>
+  </button>
+</div>
+
+<button class="nav-scroll-btn left" id="btn-nav-left" title="向左滚动">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+</button>
+<button class="nav-scroll-btn right" id="btn-nav-right" title="向右滚动">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+</button>
+
+<main id="list" class="mode-fit"><div id="empty">正在加载谱面…</div></main>
 
 <!-- 底部自动滚动悬浮栏 -->
 <div id="autoscroll-bar">
   <button id="btn-scroll-toggle">▶ 滚动</button>
   <div class="speed-group">
     <button class="speed-btn" id="speed-down">−</button>
-    <span class="speed-val" id="speed-label">30 px/s</span>
+    <input type="number" id="speed-input" class="speed-input" value="30" min="1" max="500" step="1" />
+    <span class="speed-val" style="min-width:auto; margin-left:-2px;">px/s</span>
     <button class="speed-btn" id="speed-up">+</button>
   </div>
 </div>
@@ -1899,6 +2603,23 @@ main {{ display:flex; flex-direction:column; gap:12px; padding:12px 8px 90px; ma
     }}
   }}
 
+  function updateFullscreenClass() {{
+    var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (isFs) document.body.classList.add('is-fullscreen');
+    else document.body.classList.remove('is-fullscreen');
+  }}
+  document.addEventListener('fullscreenchange', updateFullscreenClass);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenClass);
+
+  var btnExitFs = document.getElementById('btn-exit-fullscreen');
+  if (btnExitFs) {{
+    btnExitFs.addEventListener('click', function(e) {{
+      e.stopPropagation();
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }});
+  }}
+
   var btnFs = document.getElementById('btn-fullscreen');
   if (btnFs) btnFs.addEventListener('click', function() {{ toggleFullScreen(); }});
   var lbFsBtn = document.getElementById('lb-fs-btn');
@@ -1915,25 +2636,35 @@ main {{ display:flex; flex-direction:column; gap:12px; padding:12px 8px 90px; ma
   var lastScrollTime = 0;
   var scrollRaf = null;
   var btnScrollToggle = document.getElementById('btn-scroll-toggle');
-  var speedLabel = document.getElementById('speed-label');
+  var speedInput = document.getElementById('speed-input');
   var btnSpeedDown = document.getElementById('speed-down');
   var btnSpeedUp = document.getElementById('speed-up');
 
-  function updateSpeedLabel() {{
-    speedLabel.textContent = scrollSpeed + ' px/s';
-  }}
-
   btnSpeedDown.addEventListener('click', function(e) {{
     e.stopPropagation();
-    scrollSpeed = Math.max(10, scrollSpeed - 10);
-    updateSpeedLabel();
+    scrollSpeed = Math.max(1, scrollSpeed - 5);
+    if (speedInput) speedInput.value = scrollSpeed;
   }});
 
   btnSpeedUp.addEventListener('click', function(e) {{
     e.stopPropagation();
-    scrollSpeed = Math.min(150, scrollSpeed + 10);
-    updateSpeedLabel();
+    scrollSpeed = Math.min(500, scrollSpeed + 5);
+    if (speedInput) speedInput.value = scrollSpeed;
   }});
+
+  if (speedInput) {{
+    speedInput.addEventListener('input', function() {{
+      var val = parseInt(speedInput.value, 10);
+      if (!isNaN(val) && val >= 1) {{
+        scrollSpeed = Math.min(500, val);
+      }}
+    }});
+    speedInput.addEventListener('change', function() {{
+      var val = parseInt(speedInput.value, 10);
+      scrollSpeed = isNaN(val) ? 30 : Math.max(1, Math.min(500, val));
+      speedInput.value = scrollSpeed;
+    }});
+  }}
 
   function stepScroll(now) {{
     if (!isAutoScrolling) return;
@@ -1987,6 +2718,127 @@ main {{ display:flex; flex-direction:column; gap:12px; padding:12px 8px 90px; ma
   window.addEventListener('wheel', function() {{
     if (isAutoScrolling) stopAutoScroll();
   }}, {{ passive: true }});
+
+  // -------------------------------------------------------------------------
+  // 3. 自适应满高 / 纵向滚动模式切换（默认自适应）
+  // -------------------------------------------------------------------------
+  var currentMode = localStorage.getItem('guest_viewer_mode') || 'fit';
+  var btnModeToggle = document.getElementById('btn-mode-toggle');
+  var modeText = document.getElementById('mode-text');
+  var autoscrollBar = document.getElementById('autoscroll-bar');
+
+  function applyMode(m) {{
+    currentMode = m;
+    localStorage.setItem('guest_viewer_mode', m);
+    if (m === 'fit') {{
+      list.className = 'mode-fit';
+      if (modeText) modeText.textContent = '🖼 自适应';
+      if (autoscrollBar) autoscrollBar.style.display = 'none';
+      stopAutoScroll();
+    }} else {{
+      list.className = 'mode-scroll';
+      if (modeText) modeText.textContent = '📜 滚动';
+      if (autoscrollBar) autoscrollBar.style.display = 'flex';
+    }}
+  }}
+
+  if (btnModeToggle) {{
+    btnModeToggle.addEventListener('click', function() {{
+      applyMode(currentMode === 'fit' ? 'scroll' : 'fit');
+    }});
+  }}
+  applyMode(currentMode);
+
+  // 左右两侧浮动滚动按钮点击处理
+  var btnNavLeft = document.getElementById('btn-nav-left');
+  var btnNavRight = document.getElementById('btn-nav-right');
+  if (btnNavLeft) {{
+    btnNavLeft.addEventListener('click', function(e) {{
+      e.stopPropagation();
+      if (currentMode === 'fit') {{
+        list.scrollBy({{ left: -window.innerWidth * 0.65, behavior: 'smooth' }});
+      }} else {{
+        window.scrollBy({{ top: -window.innerHeight * 0.75, behavior: 'smooth' }});
+      }}
+    }});
+  }}
+  if (btnNavRight) {{
+    btnNavRight.addEventListener('click', function(e) {{
+      e.stopPropagation();
+      if (currentMode === 'fit') {{
+        list.scrollBy({{ left: window.innerWidth * 0.65, behavior: 'smooth' }});
+      }} else {{
+        window.scrollBy({{ top: window.innerHeight * 0.75, behavior: 'smooth' }});
+      }}
+    }});
+  }}
+
+  // -------------------------------------------------------------------------
+  // 4. 电视遥控器按键控制支持（TV Remote Control）
+  // 左右：滚动/翻页；上下：切换视图；返回：退出全屏/返回上一页
+  // -------------------------------------------------------------------------
+  window.addEventListener('keydown', function(e) {{
+    var key = e.key;
+    var code = e.keyCode || e.which;
+
+    // 1. 返回键处理（ESC, Backspace, Android Back, Tizen/webOS Back）
+    var isBack = (key === 'Escape' || key === 'Back' || key === 'BrowserBack' || code === 8 || code === 4 || code === 10009);
+    if (isBack) {{
+      if (lb && lb.classList.contains('active')) {{
+        e.preventDefault();
+        lb.classList.remove('active');
+        return;
+      }}
+      if (document.fullscreenElement || document.webkitFullscreenElement) {{
+        e.preventDefault();
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        return;
+      }}
+      // 若历史记录可后退，则后退
+      if (window.history.length > 1) {{
+        window.history.back();
+      }}
+    }}
+
+    // 如果焦点在输入框中，保留原生输入
+    var tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    // 2. 左右按键：翻页或滚动
+    var isLeft = (key === 'ArrowLeft' || code === 21);
+    var isRight = (key === 'ArrowRight' || code === 22);
+    if (isLeft || isRight) {{
+      if (lb && lb.classList.contains('active')) {{
+        e.preventDefault();
+        openPage(isLeft ? curIdx - 1 : curIdx + 1);
+        return;
+      }}
+      e.preventDefault();
+      if (currentMode === 'fit') {{
+        list.scrollBy({{ left: isLeft ? -window.innerWidth * 0.7 : window.innerWidth * 0.7, behavior: 'smooth' }});
+      }} else {{
+        window.scrollBy({{ top: isLeft ? -window.innerHeight * 0.8 : window.innerHeight * 0.8, behavior: 'smooth' }});
+      }}
+      return;
+    }}
+
+    // 3. 上下按键：切换排版模式（自适应满高 / 垂直滚动）
+    var isUp = (key === 'ArrowUp' || code === 19);
+    var isDown = (key === 'ArrowDown' || code === 20);
+    if (isUp || isDown) {{
+      e.preventDefault();
+      applyMode(currentMode === 'fit' ? 'scroll' : 'fit');
+      return;
+    }}
+
+    // 4. 确定/选择键：在垂直滚动模式下切换播放/暂停
+    var isEnter = (key === 'Enter' || key === 'Select' || code === 13 || code === 23);
+    if (isEnter && currentMode === 'scroll') {{
+      if (isAutoScrolling) stopAutoScroll();
+      else startAutoScroll();
+    }}
+  }});
 }})();
 </script>
 </body>

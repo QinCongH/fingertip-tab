@@ -31,6 +31,16 @@ export interface SongDto {
   collectionIds: number[];
 }
 
+export interface PagedSongsDto {
+  items: SongDto[];
+  total: number;
+  allCount: number;
+  uncategorizedCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface CollectionDto {
   id: number;
   name: string;
@@ -119,6 +129,14 @@ export interface CaptureResult {
   height: number;
 }
 
+/** 目标目录探测结果：用于判断加载已有工作区还是初始化新工作区 */
+export interface LibraryProbe {
+  exists: boolean;
+  empty: boolean;
+  hasDb: boolean;
+  hasResources: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // 命令封装
 // ---------------------------------------------------------------------------
@@ -140,6 +158,20 @@ export const api = {
   readImageBase64: (path: string) => invoke<string>("read_image_base64", { path }),
   getSongs: (collectionId: number | null, search: string | null) =>
     invoke<SongDto[]>("get_songs", { collectionId, search }),
+  getSongsPaged: (
+    page: number,
+    pageSize: number,
+    collectionId: number | null,
+    uncategorized: boolean | null,
+    search: string | null,
+  ) =>
+    invoke<PagedSongsDto>("get_songs_paged", {
+      page,
+      pageSize,
+      collectionId,
+      uncategorized,
+      search,
+    }),
   getSong: (id: number) => invoke<SongDto>("get_song", { id }),
   updateSong: (id: number, meta: SongMetaInput, collectionIds: number[]) =>
     invoke<void>("update_song", { id, meta, collectionIds }),
@@ -162,8 +194,10 @@ export const api = {
   getSettings: () => invoke<AppSettings>("get_settings"),
   saveSettings: (settings: AppSettings) =>
     invoke<void>("save_settings", { settings }),
-  migrateLibrary: (newPath: string) =>
-    invoke<void>("migrate_library", { newPath }),
+  probeLibraryPath: (path: string) =>
+    invoke<LibraryProbe>("probe_library_path", { path }),
+  switchLibrary: (newPath: string, initIfMissing: boolean) =>
+    invoke<void>("switch_library", { newPath, initIfMissing }),
   backupLibrary: (dest: string) => invoke<string>("backup_library", { dest }),
   restoreLibrary: (src: string) => invoke<void>("restore_library", { src }),
 
